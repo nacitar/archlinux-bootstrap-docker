@@ -38,6 +38,12 @@ cleanup() {
 		       errored=1
 		fi
 	fi
+	if [[ -f "$rootfs" ]]; then
+		rm "$rootfs"
+		if ! result_message "delete rootfs file $rootfs"; then
+		       errored=1
+		fi
+	fi
 	if [[ -d "$tmp_dir" ]]; then
 		rm -rf "$tmp_dir"
 		if ! result_message "delete temp directory and contents $tmp_dir"; then
@@ -94,38 +100,51 @@ mkdir "$mount_point"  # can let the failure of the next command handle reporting
 mount "$rootfs" "$mount_point"
 result_message_or_fail 8 "mount rootfs to mount point $mount_point"
 
-#init_file="$mount_point/init"
-#if [[ -e "$init_file" ]]; then
-#	truncate -s 0 "$init_file"
-#	result_message_or_fail 9 "[WSL IMPORT BUG WORKAROUND] existing /init truncated to 0 bytes"
-#else
-#	touch "$init_file"
-#	result_message_or_fail 10 "[WSL IMPORT BUG WORKAROUND] create missing /init as 0 byte file"
-#
-#	chmod 755 "$init_file"
-#	result_message_or_fail 11 "[WSL IMPORT BUG WORKAROUND] set /init permissions"
-#fi
-
 tar_file="$PWD/archlinux_base_$(date "+%Y%m%d").tar"
 TAR_PARAMS=(
-	--selinux
-	--acls
 	--xattrs
-	-cp
+	--preserve-permissions
 	--same-owner
+	--create
 	--exclude=./{dev,mnt,proc,run,sys,tmp}/*
 	--exclude=./lost+found
 	--one-file-system
-	-C "$mount_point"
-	.
 )
 # tar_errors="$tmp_dir/errors.log"
-tar ${TAR_PARAMS[@]} > "$tar_file" # 2> "$tar_errors"
-result_message_or_fail 12 "create tar file $tar_file"
+tar ${TAR_PARAMS[@]} -C "$mount_point" . > "$tar_file" # 2> "$tar_errors"
+result_message_or_fail 9 "create tar file $tar_file"
+
+# I have no idea why repacking is necessary, but this makes WSL happy...
+# if you compare the tar files, with diffoscope or pkgdiff it matches.
+# if you extract the tar files and use diff -qr, it matches.
+# and yet, repacking _somehow_ makes WSL happy.  I blame WSL bugs
+# but can't explain the nature of it.  WTF?
+repack_tar=1
+if (( $repack_tar != 0 )); then
+	repack_dir="$tmp_dir/repack"
+	mkdir "$repack_dir"
+	result_message_or_fail 10 "create repack directory $repack_dir"
+
+	UNTAR_PARAMS=(
+		--xattrs
+		--preserve-permissions
+		--same-owner
+		--extract
+	)
+
+	cat "$tar_file" | tar ${UNTAR_PARAMS[@]} -C "$repack_dir" 
+	result_message_or_fail 11 "extract tar file $tar_file"
+
+	rm "$tar_file"
+	result_message_or_fail 12 "delete tar file $tar_file"
+
+	tar ${TAR_PARAMS[@]} -C "$repack_dir" . > "$tar_file" # 2> "$tar_errors"
+	result_message_or_fail 13 "repack tarball to $tar_file"
+fi
 
 if [[ -n "$SUDO_USER" ]]; then
 	chown "$SUDO_USER:$SUDO_USER" $tar_file
-	result_message_or_fail 13 "set tar file owner to SUDO_USER $SUDO_USER"
+	result_message_or_fail 14 "set tar file owner to SUDO_USER $SUDO_USER"
 fi
 
 success_message "prepared $tar_file"
