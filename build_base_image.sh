@@ -105,6 +105,7 @@ TAR_PARAMS=(
 	--xattrs
 	--preserve-permissions
 	--same-owner
+	--numeric-owner
 	--create
 	--exclude=./{dev,mnt,proc,run,sys,tmp}/*
 	--exclude=./lost+found
@@ -129,6 +130,8 @@ if (( $repack_tar != 0 )); then
 		--xattrs
 		--preserve-permissions
 		--same-owner
+		--numeric-owner
+		--same-order
 		--extract
 	)
 
