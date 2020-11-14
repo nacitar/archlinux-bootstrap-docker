@@ -23,10 +23,12 @@ cleanup() {
 trap 'cleanup' EXIT
 
 
+# Arguments
 loop_device="$@"
 if [[ ! -b "$loop_device" ]]; then
-	fail 2 "passed path is not a block device \"$loop_device\""
+	fail 2 "pacstrap requires a block device but passed path is not one: $loop_device"
 fi
+
 
 # the container was missing this on 9/17/2020, but it may exist later
 # avoids error: "mount: /mnt/rootfs/dev/shm: mount point is a symbolic link to nowhere."

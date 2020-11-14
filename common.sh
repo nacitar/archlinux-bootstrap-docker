@@ -32,3 +32,10 @@ require_root_privilege() {
 		fail 1 "script must be run as root"
 	fi
 }
+get_argument() {
+	if [ -z $2 ] || [ ${2:0:1} == "-" ]; then
+		# no next argument or next argument is another flag
+		echo "Expected argument for option: $1. None received, exiting." >&2
+		exit 1
+	fi
+}
