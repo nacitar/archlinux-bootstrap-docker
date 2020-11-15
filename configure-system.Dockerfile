@@ -4,7 +4,7 @@ ARG ESSENTIAL_TOOLS
 ARG DEV_TOOLS
 ARG CROSS_DEV_TOOLS
 COPY configure-system.sh /
-COPY common.sh /
+RUN env
 RUN /configure-system.sh
-RUN rm /configure-system.sh /common.sh
-ENTRYPOINT [ "bash" ]
+RUN rm /configure-system.sh
+ENTRYPOINT bash
