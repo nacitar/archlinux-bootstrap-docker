@@ -1,6 +1,8 @@
 FROM wsl-archlinux:base
 ARG ADMIN_USER
-ARG TOOLS
+ARG ESSENTIAL_TOOLS
+ARG DEV_TOOLS
+ARG CROSS_DEV_TOOLS
 COPY configure-system.sh /
 COPY common.sh /
 RUN /configure-system.sh

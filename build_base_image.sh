@@ -19,22 +19,41 @@ source "$script_directory/common.sh"
 require_root_privilege
 
 ADMIN_USER=""
-TOOLS=""
+ESSENTIAL_TOOLS=0
+DEV_TOOLS=0
+CROSS_DEV_TOOLS=0
 BASE_TAR=0
+KEEP_DOCKER_IMAGE=0
+REMOVE_BOOTSTRAP_IMAGE=0
 
-PARAMS=""
-
+#PARAMS=""
 while (( "$#" )); do
 	case "$1" in
-		-b|--base-tar)
+		--base-tar)
 			BASE_TAR=1
+			shift
 			;;
-		-t|--tools)
-			get_argument "$@"
-			TOOLS="$2"
-			shift 2
+		--essential-tools)
+			ESSENTIAL_TOOLS=1
+			shift
 			;;
-		-a|--admin-user)
+		--dev-tools)
+			DEV_TOOLS=1
+			shift
+			;;
+		--cross-dev-tools)
+			CROSS_DEV_TOOLS=1
+			shift
+			;;
+		--keep-docker-image)
+			KEEP_DOCKER_IMAGE=1
+			shift
+			;;
+		--remove-bootstrap-image)
+			REMOVE_BOOTSTRAP_IMAGE=1
+			shift
+			;;
+		--admin-user)
 			get_argument "$@"
 			ADMIN_USER="$2"
 			shift 2
@@ -44,16 +63,15 @@ while (( "$#" )); do
 			exit 1
 			;;
 		*) # preserve positional arguments
-			PARAMS="$PARAMS $1"
-			shift
+			#PARAMS="$PARAMS $1"
+			#shift
+			fail_message "Unsupported positional argument: $1"
+			exit 1
 			;;
 	esac
 done
 # set positional arguments in their proper place
-eval set -- "$PARAMS"
-
-echo "Admin User: $ADMIN_USER"
-echo "Tools: $TOOLS"
+#eval set -- "$PARAMS"
 
 cleanup() {
 	errored=0
@@ -137,12 +155,15 @@ TAR_PARAMS=(
 )
 base_wsl_image_name="wsl-archlinux:base"
 wsl_image_name="wsl-archlinux:latest"
+run_date="$(date "+%Y%m%d")"
+base_tar_file="$PWD/archlinux_base_$run_date.tar"
+tar_file="$PWD/archlinux_$run_date.tar"
 if (( $BASE_TAR != 0 )); then
 	# just tarring up the base system; nothing else
-	tar_file="$PWD/archlinux_base_$(date "+%Y%m%d").tar"
+	base_tar_file="$PWD/archlinux_base_$run_date.tar"
 	# tar_errors="$tmp_dir/errors.log"
-	tar ${TAR_PARAMS[@]} -C "$mount_point" . > "$tar_file" # 2> "$tar_errors"
-	result_message_or_fail 9 "create tar file $tar_file"
+	tar ${TAR_PARAMS[@]} -C "$mount_point" . > "$base_tar_file" # 2> "$tar_errors"
+	result_message_or_fail 9 "create base tar file $base_tar_file"
 
 	# I have no idea why repacking is necessary, but this makes WSL happy...
 	# if you compare the tar files, with diffoscope or pkgdiff it matches.
@@ -164,28 +185,62 @@ if (( $BASE_TAR != 0 )); then
 			--extract
 		)
 
-		cat "$tar_file" | tar ${UNTAR_PARAMS[@]} -C "$repack_dir" 
-		result_message_or_fail 11 "extract tar file $tar_file"
+		cat "$base_tar_file" | tar ${UNTAR_PARAMS[@]} -C "$repack_dir" 
+		result_message_or_fail 11 "extract tar file $base_tar_file"
 
-		rm "$tar_file"
-		result_message_or_fail 12 "delete tar file $tar_file"
+		rm "$base_tar_file"
+		result_message_or_fail 12 "delete tar file $base_tar_file"
 
-		tar ${TAR_PARAMS[@]} -C "$repack_dir" . > "$tar_file" # 2> "$tar_errors"
-		result_message_or_fail 13 "repack tarball to $tar_file"
+		tar ${TAR_PARAMS[@]} -C "$repack_dir" . > "$base_tar_file" # 2> "$tar_errors"
+		result_message_or_fail 13 "repack tarball to $base_tar_file"
 
 		if [[ -n "$SUDO_USER" ]]; then
-			chown "$SUDO_USER:$SUDO_USER" $tar_file
+			chown "$SUDO_USER:$SUDO_USER" "$base_tar_file"
 			result_message_or_fail 14 "set tar file owner to SUDO_USER $SUDO_USER"
 		fi
 	fi
-	success_message "prepared $tar_file"
+	success_message "prepared $base_tar_file"
 	# import the tar file we just made
-	docker import $tar_file $base_wsl_image_name
+	docker import "$base_tar_file" "$base_wsl_image_name"
 	result_message_or_fail 15 "import base image from tar file to $base_wsl_image_name"
 else
 	tar ${TAR_PARAMS[@]} -C "$mount_point" . | docker import - $base_wsl_image_name
 	result_message_or_fail 15 "import base image from mount point to $base_wsl_image_name"
 fi
-configure_system_dockerfile="configure-system.Dockerfile"
-docker build --no-cache -t "$wsl_image_name" -f "$configure_system_dockerfile" "$script_directory" --build-arg ADMIN_USER=$ADMIN_USER --build-arg TOOLS=$TOOLS 
-result_message_or_fail 16 "build docker image $base_wsl_image_name"
+arguments=(
+	build --no-cache
+	-t "$wsl_image_name"
+	-f "configure-system.Dockerfile"
+	"$script_directory"
+	--build-arg "ADMIN_USER=$ADMIN_USER"
+	--build-arg "ESSENTIAL_TOOLS=$ESSENTIAL_TOOLS"
+	--build-arg "DEV_TOOLS=$DEV_TOOLS"
+	--build-arg "CROSS_DEV_TOOLS=$CROSS_DEV_TOOLS"
+)
+
+docker "${arguments[@]}"
+result_message_or_fail 16 "build docker image $wsl_image_name"
+
+container_name="wsl-archlinux"
+docker create --name "$container_name" "$wsl_image_name"
+result_message_or_fail 17 "create temporary container $container_name"
+
+docker export "$container_name" > "$tar_file"
+result_message_or_fail 18 "export container filesystem $container_name"
+if [[ -n "$SUDO_USER" ]]; then
+	chown "$SUDO_USER:$SUDO_USER" "$tar_file"
+	result_message_or_fail 19 "set tar file owner to SUDO_USER $SUDO_USER"
+fi
+success_message "prepared $tar_file"
+
+docker rm -vf "$container_name"
+result_message_or_fail 20 "delete temporary container $container_name"
+
+if [[ "$KEEP_DOCKER_IMAGE" != 1 ]]; then
+	docker rmi -f "$base_wsl_image_name" "$wsl_image_name"
+	result_message_or_fail 21 "delete docker images"
+fi
+if [[ "$REMOVE_BOOTSTRAP_IMAGE" == 1 ]]; then
+	docker rmi -f "$BOOTSTRAP_IMAGE"
+	result_message_or_fail 22 "delete docker bootstrap image"
+fi

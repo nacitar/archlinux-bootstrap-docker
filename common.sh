@@ -39,3 +39,6 @@ get_argument() {
 		exit 1
 	fi
 }
+
+DEFAULT_PASSWORD="archlinux"
+BOOTSTRAP_IMAGE="archlinux:latest"
