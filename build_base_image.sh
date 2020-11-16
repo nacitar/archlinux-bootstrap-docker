@@ -14,6 +14,7 @@ DEV_TOOLS=0
 CROSS_DEV_TOOLS=0
 BASE_TAR=0
 KEEP_DOCKER_IMAGE=0
+FROM_EXISTING_BASE=0
 REMOVE_BOOTSTRAP_BASE_IMAGE=0
 
 check_argument() {
@@ -30,6 +31,10 @@ while (( "$#" )); do
 		--dev-tools) DEV_TOOLS=1; shift;;
 		--cross-dev-tools) CROSS_DEV_TOOLS=1; shift;;
 		--keep-docker-image) KEEP_DOCKER_IMAGE=1; shift;;
+		--from-existing-base)
+			FROM_EXISTING_BASE=1
+			KEEP_DOCKER_IMAGE=1  # forced
+			shift;;
 		--remove-bootstrap-base-image) REMOVE_BOOTSTRAP_BASE_IMAGE=1; shift;;
 		--admin-user) check_argument "$@"; ADMIN_USER="$2"; shift 2;;
 		-*|--*=)
@@ -106,27 +111,31 @@ TAR_PARAMS=(
 # thus a loop mount is used to appease this requirement
 tmp_dir="$(mktemp -d)"
 
-# only needs enough space for the base pacstrap
-rootfs="$tmp_dir/rootfs"
-head -c 1G /dev/zero > "$rootfs"
-mkfs.ext4 "$rootfs"
+if (( $FROM_EXISTING_BASE == 0 )); then
+	# only needs enough space for the base pacstrap
+	rootfs="$tmp_dir/rootfs"
+	head -c 1G /dev/zero > "$rootfs"
+	mkfs.ext4 "$rootfs"
 
-loop_device="$(losetup -f --show "$rootfs")"
+	loop_device="$(losetup -f --show "$rootfs")"
 
-bootstrap_base_image_name="archlinux:latest"
-bootstrap_image_name="arch-bootstrap:latest"
-docker build --no-cache -t "$bootstrap_image_name" -f arch-bootstrap.Dockerfile "$script_directory" 
+	bootstrap_base_image_name="archlinux:latest"
+	bootstrap_image_name="arch-bootstrap:latest"
+	docker build --no-cache -t "$bootstrap_image_name" -f arch-bootstrap.Dockerfile "$script_directory" 
 
-docker run --rm --privileged "$bootstrap_image_name" "$loop_device"
+	docker run --rm --privileged "$bootstrap_image_name" "$loop_device"
 
-mount_point="$tmp_dir/fsmount"
-mkdir "$mount_point"  # can let the failure of the next command handle reporting
-mount "$rootfs" "$mount_point"
+	mount_point="$tmp_dir/fsmount"
+	mkdir "$mount_point"  # can let the failure of the next command handle reporting
+	mount "$rootfs" "$mount_point"
+
+	base_wsl_image_name="wsl-archlinux:base"
+	tar ${TAR_PARAMS[@]} -C "$mount_point" . | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
+else
+	base_wsl_image_name="wsl-archlinux:base"
+fi
 
 run_date="$(date "+%Y%m%d")"
-base_wsl_image_name="wsl-archlinux:base"
-tar ${TAR_PARAMS[@]} -C "$mount_point" . | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
-
 if (( $BASE_TAR != 0 )); then
 	export_docker_image "$base_wsl_image_name" "$PWD/archlinux_base_$run_date.tar"
 fi

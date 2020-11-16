@@ -13,6 +13,11 @@ fi
 # - CROSS_DEV_TOOLS
 
 DEFAULT_PASSWORD="archlinux"
+INSTALL_ARGS=(-Syu --noconfirm --needed)
+install_packages() {
+	set -e  # hack
+	pacman -Syu --noconfirm --needed "$@"
+}
 
 # fixes errors like: D8AFDDA07A5B6EDFA7D8CCDAD6D055F927843F1C could not be locally signed.
 # https://www.archlinux.org/news/gnupg-21-and-the-pacman-keyring/
@@ -27,13 +32,19 @@ if [[ -n "$ADMIN_USER" ]]; then
 	useradd -m "$ADMIN_USER"
 	usermod -aG wheel "$ADMIN_USER"
 	echo "$ADMIN_USER:$DEFAULT_PASSWORD" | chpasswd
-	pacman -Syu --noconfirm sudo shadow  # shadow is for chpasswd
+	install_packages sudo shadow sed # shadow is for chpasswd
 
-	(
-		echo
-		echo '## Allow members of group wheel to execute any command'
-		echo '%wheel ALL=(ALL) ALL'
-	) >> /etc/sudoers
+	if grep "# %wheel ALL=(ALL) ALL" /etc/sudoers &>/dev/null; then
+		# uncomment it if in the expected form
+		sed '/^# %wheel ALL=(ALL) ALL$/s/^# //g' -i /etc/sudoers
+	else
+		# append it
+		(
+			echo
+			echo '## Allow members of group wheel to execute any command'
+			echo '%wheel ALL=(ALL) ALL'
+		) >> /etc/sudoers
+	fi
 
 	(
 		echo '[user]'
@@ -49,7 +60,7 @@ if [[ "$ESSENTIAL_TOOLS" == 1 ]]; then
 		man man-db man-pages
 		tar gzip zip unzip
 	)
-	pacman -Syu --noconfirm "${packages[@]}"
+	install_packages "${packages[@]}"
 fi
 
 if [[ "$DEV_TOOLS" == 1 ]]; then
@@ -58,7 +69,7 @@ if [[ "$DEV_TOOLS" == 1 ]]; then
 		make cmake
 		python-pip
 	)
-	pacman -Syu --noconfirm "${packages[@]}"
+	install_packages "${packages[@]}"
 	pip install conan
 fi
 
@@ -66,8 +77,9 @@ if [[ "$CROSS_DEV_TOOLS" == 1 ]]; then
 	packages=(
 		avr-gcc mingw-w64-gcc
 	)
-	pacman -Syu --noconfirm "${packages[@]}"
+	install_packages "${packages[@]}"
 fi
 
-# TODO: remove excess files now, or later.. and avoid reinstalling packages
+# This will be a tmpfs, in actuality... clear out the temp files.
+rm -rf /run/*
 
