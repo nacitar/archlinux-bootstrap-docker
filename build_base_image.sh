@@ -98,16 +98,6 @@ export_docker_image() {
 	# delete temporary container
 	docker rm -vf "$container_id"
 }
-TAR_PARAMS=(
-	--xattrs
-	--preserve-permissions
-	--same-owner
-	--numeric-owner
-	--create
-	--exclude=./{dev,mnt,proc,run,sys,tmp}/*
-	--exclude=./lost+found
-	--one-file-system
-)
 # pacstrap needs a mount point, rather than simply a directory
 # thus a loop mount is used to appease this requirement
 tmp_dir="$(mktemp -d)"
@@ -131,7 +121,19 @@ if (( $FROM_EXISTING_BASE == 0 )); then
 	mount "$rootfs" "$mount_point"
 
 	base_wsl_image_name="wsl-archlinux:base"
-	tar ${TAR_PARAMS[@]} -C "$mount_point" . | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
+	TAR_PARAMS=(
+		--xattrs
+		--preserve-permissions
+		--same-owner
+		--numeric-owner
+		--create
+		--exclude=./{dev,mnt,proc,run,sys,tmp}/*
+		--exclude=./lost+found
+		--one-file-system
+		-C "$mount_point"
+		.  # CWD from line above
+	)
+	tar ${TAR_PARAMS[@]} | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
 else
 	base_wsl_image_name="wsl-archlinux:base"
 fi
