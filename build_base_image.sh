@@ -90,7 +90,8 @@ export_docker_image() {
 	tar_file="$2"
 	# create temporary container
 	container_id="$(docker create "$image_name")"
-	docker export "$container_id" > "$tar_file"
+	# docker export unavoidably adds a .dockerenv, so it must be filtered out
+	docker export "$container_id" | tar --delete .dockerenv > "$tar_file"
 	if [[ -n "$SUDO_USER" ]]; then
 		chown "$SUDO_USER:$SUDO_USER" "$tar_file"
 	fi
