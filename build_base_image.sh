@@ -1,85 +1,64 @@
 #!/bin/bash
+
+# requires bash 4.2+ due to negative indexes
 set -e
 
-if (( $EUID != 0 )); then
+if [[ "$EUID" -ne 0 ]]; then
 	echo 'script must be run as root' >&2
 	exit 1
 fi
 
 script_directory="$(dirname "${BASH_SOURCE[0]}")"
 
-ADMIN_USER=""
-ESSENTIAL_TOOLS=0
-DEV_TOOLS=0
-CROSS_DEV_TOOLS=0
-BASE_TAR=0
-KEEP_DOCKER_IMAGE=0
-FROM_EXISTING_BASE=0
-REMOVE_BOOTSTRAP_BASE_IMAGE=0
-
-check_argument() {
-	if [ -z $2 ] || [ ${2:0:1} == "-" ]; then
-		# no next argument or next argument is another flag
-		echo "Expected argument for option: $1. None received, exiting." >&2
-		exit 1
-	fi
-}
 while (( "$#" )); do
+	while [[ "$1" == -[^-][^-]* ]]; do
+		set -- ${1::-1} "-${1: -1}" "${@:2}"  # split out multiflags
+	done
 	case "$1" in
-		--base-tar) BASE_TAR=1;	shift;;
-		--essential-tools) ESSENTIAL_TOOLS=1; shift;;
-		--dev-tools) DEV_TOOLS=1; shift;;
-		--cross-dev-tools) CROSS_DEV_TOOLS=1; shift;;
-		--keep-docker-image) KEEP_DOCKER_IMAGE=1; shift;;
-		--from-existing-base)
-			FROM_EXISTING_BASE=1
-			KEEP_DOCKER_IMAGE=1  # forced
-			shift;;
-		--remove-bootstrap-base-image) REMOVE_BOOTSTRAP_BASE_IMAGE=1; shift;;
-		--admin-user) check_argument "$@"; ADMIN_USER="$2"; shift 2;;
-		-*|--*=)
-			echo "Unsupported flag: $1" >&2
-			exit 1
-			;;
-		*)
-			echo "Unsupported positional argument: $1" >&2
-			exit 1
-			;;
+		-b|--base-tar) BASE_TAR=1;;
+		-e|--essential-tools) ESSENTIAL_TOOLS=1;;
+		-d|--dev-tools) DEV_TOOLS=1;;
+		-c|--cross-dev-tools) CROSS_DEV_TOOLS=1;;
+		-r|--remove-bootstrap-base-image) REMOVE_BOOTSTRAP_BASE_IMAGE=1;;
+		--keep-base-docker-image) KEEP_BASE_DOCKER_IMAGE=1;;
+		--keep-docker-image) KEEP_DOCKER_IMAGE=1;;
+		--from-existing-base) FROM_EXISTING_BASE=1;;
+		--admin-user=*) ADMIN_USER=${1#*=};;
+		-*) echo "unsupported flag: $1" >&2; exit 1;;
+		*) echo "unsupported positional argument: $1" >&2; exit 1;;
 	esac
+	shift
 done
 
+cleanup=()  # append function names to this, will be called in reverse order
 cleanup() {
-	echo "Cleaning up..."
-	if [[ "$KEEP_DOCKER_IMAGE" != 1 ]]; then
-		if [[ -n "$wsl_image_name" ]]; then
-			docker rmi -f "$wsl_image_name"
-		fi
-		if [[ -n "$base_wsl_image_name" ]]; then
-			docker rmi -f "$base_wsl_image_name"
-		fi
-	fi
-	if [[ -n "$mount_point" ]]; then
-		umount "$mount_point"
-	fi
-	if [[ -n "$bootstrap_image_name" ]]; then
-		docker image rm "$bootstrap_image_name"
-	fi
-	if [[ "$REMOVE_BOOTSTRAP_BASE_IMAGE" == 1 ]]; then
-		if [[ -n "$bootstrap_base_image_name" ]]; then
-			docker rmi -f "$bootstrap_base_image_name"
-		fi
-	fi
-	if [[ -n "$loop_device" ]]; then
-		losetup -d "$loop_device"
-	fi
-	if [[ -f "$rootfs" ]]; then
-		rm "$rootfs"
-	fi
-	if [[ -d "$tmp_dir" ]]; then
-		rm -rf "$tmp_dir"
-	fi
+	for (( i=${#cleanup[@]}-1 ; i>=0 ; i-- )) ; do
+		"${cleanup[i]}"
+	done
 }
 trap 'cleanup' EXIT
+
+export_docker_container_filesystem() {
+	if [[ $# -ne 2 ]]; then
+		echo "Usage: export_docker_container_filesystem <container_id> <destination_tar_file>"
+	fi
+	container_id="$1"
+	destination_tar_file="$2"
+	# docker export unavoidably adds a .dockerenv, so it must be filtered out
+	docker export "$container_id" | tar --delete .dockerenv > "$destination_tar_file"
+	export_status="${PIPESTATUS[0]}" tar_status="${PIPESTATUS[0]}"
+	if [[ "$export_status" -ne 0 ]]; then
+	       echo "error code $export_status when exporting container $container_id" >&2
+	       exit 1
+	fi
+	if [[ "$tar_status" -ne 0 ]]; then
+	       echo "error code $tar_status when filtering out .dockerenv from export of container $container_id" >&2
+	       exit 1
+	fi
+	if [[ -n "$SUDO_USER" ]]; then
+		chown "$SUDO_USER:$SUDO_USER" "$destination_tar_file"
+	fi
+}
 
 export_docker_image() {
 	if [[ $# -ne 2 ]]; then
@@ -101,26 +80,51 @@ export_docker_image() {
 # pacstrap needs a mount point, rather than simply a directory
 # thus a loop mount is used to appease this requirement
 tmp_dir="$(mktemp -d)"
+remove_tmp_dir() {
+	rm -rf "$tmp_dir"
+}
+cleanup+=(remove_tmp_dir)
 
-if (( $FROM_EXISTING_BASE == 0 )); then
+if [[ "$FROM_EXISTING_BASE" -ne 1 ]]; then
 	# only needs enough space for the base pacstrap
 	rootfs="$tmp_dir/rootfs"
 	head -c 1G /dev/zero > "$rootfs"
+	remove_rootfs() {
+		rm "$rootfs"
+	}
+	cleanup+=(remove_rootfs)
+
 	mkfs.ext4 "$rootfs"
 
 	loop_device="$(losetup -f --show "$rootfs")"
+	detach_loop_device() {
+		losetup -d "$loop_device"
+	}
+	cleanup+=(detach_loop_device)
 
 	bootstrap_base_image_name="archlinux:latest"
 	bootstrap_image_name="arch-bootstrap:latest"
 	docker build --no-cache -t "$bootstrap_image_name" -f arch-bootstrap.Dockerfile "$script_directory" 
+	remove_bootstrap_image() {
+		docker rmi "$bootstrap_image_name"
+		if [[ "$REMOVE_BOOTSTRAP_BASE_IMAGE" -eq 1 ]]; then
+			docker rmi -f "$bootstrap_base_image_name"
+		fi
+	}
+	cleanup+=(remove_bootstrap_image)
 
 	docker run --rm --privileged "$bootstrap_image_name" "$loop_device"
 
 	mount_point="$tmp_dir/fsmount"
 	mkdir "$mount_point"  # can let the failure of the next command handle reporting
 	mount "$rootfs" "$mount_point"
+	umount_rootfs() {
+		umount "$mount_point"
+	}
+	cleanup+=(umount_rootfs)
 
 	base_wsl_image_name="wsl-archlinux:base"
+
 	TAR_PARAMS=(
 		--xattrs
 		--preserve-permissions
@@ -134,13 +138,27 @@ if (( $FROM_EXISTING_BASE == 0 )); then
 		.  # CWD from line above
 	)
 	tar ${TAR_PARAMS[@]} | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
+	if [[ $KEEP_BASE_DOCKER_IMAGE -ne 1 ]]; then
+		remove_base_docker_image() {
+			docker rmi -f "$base_wsl_image_name"
+		}
+		cleanup+=(remove_base_docker_image)
+	fi
 else
 	base_wsl_image_name="wsl-archlinux:base"
 fi
 
 run_date="$(date "+%Y%m%d")"
-if (( $BASE_TAR != 0 )); then
-	export_docker_image "$base_wsl_image_name" "$PWD/archlinux_base_$run_date.tar"
+if [[ "$BASE_TAR" -ne 0 ]]; then
+	# need to create a container in order to export the filesystem
+	temp_base_container_id="$(docker create "$base_wsl_image_name")"
+	remove_temp_base_container() {
+		docker rm -vf "$temp_base_container_id"
+	}
+	cleanup+=(remove_temp_base_container)
+	export_docker_container_filesystem "$temp_base_container_id" "$PWD/archlinux_base_$run_date.tar"
+	unset cleanup[-1]  # if no throws yet, remove it early to free space
+	remove_temp_base_container
 fi
 
 wsl_image_name="wsl-archlinux:latest"
@@ -155,8 +173,19 @@ arguments=(
 	--build-arg "CROSS_DEV_TOOLS=$CROSS_DEV_TOOLS"
 )
 docker "${arguments[@]}"
+if [[ $KEEP_DOCKER_IMAGE -ne 1 ]]; then
+	remove_docker_image() {
+		docker rmi -f "$wsl_image_name"
+	}
+	cleanup+=(remove_docker_image)
+fi
 
 # need to create a container in order to export the filesystem
-export_docker_image "$wsl_image_name" "$PWD/archlinux_$run_date.tar"
+temp_container_id="$(docker create "$wsl_image_name")"
+remove_temp_container() {
+	docker rm -vf "$temp_container_id"
+}
+cleanup+=(remove_temp_container)
+export_docker_container_filesystem "$temp_container_id" "$PWD/archlinux_$run_date.tar"
 
 exit 0

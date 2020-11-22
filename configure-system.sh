@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-if (( $EUID != 0 )); then
+if [[ "$EUID" -ne 0 ]]; then
 	echo 'script must be run as root' >&2
 	exit 1
 fi
@@ -13,7 +13,7 @@ fi
 # - CROSS_DEV_TOOLS
 
 DEFAULT_PASSWORD="archlinux"
-INSTALL_ARGS=(-Syu --noconfirm --needed)
+
 install_packages() {
 	set -e  # hack
 	pacman -Syu --noconfirm --needed "$@"
@@ -52,7 +52,7 @@ if [[ -n "$ADMIN_USER" ]]; then
 	) > /etc/wsl.conf
 fi
 
-if [[ "$ESSENTIAL_TOOLS" == 1 ]]; then
+if [[ "$ESSENTIAL_TOOLS" -eq 1 ]]; then
 	packages=(
 		procps-ng file which
 		sed gawk
@@ -63,7 +63,7 @@ if [[ "$ESSENTIAL_TOOLS" == 1 ]]; then
 	install_packages "${packages[@]}"
 fi
 
-if [[ "$DEV_TOOLS" == 1 ]]; then
+if [[ "$DEV_TOOLS" -eq 1 ]]; then
 	packages=(
 		git gcc clang
 		make cmake
@@ -73,7 +73,7 @@ if [[ "$DEV_TOOLS" == 1 ]]; then
 	pip install conan
 fi
 
-if [[ "$CROSS_DEV_TOOLS" == 1 ]]; then
+if [[ "$CROSS_DEV_TOOLS" -eq 1 ]]; then
 	packages=(
 		avr-gcc mingw-w64-gcc
 	)

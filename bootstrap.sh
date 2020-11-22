@@ -1,16 +1,16 @@
 #!/bin/bash
 set -e
 
-if (( $EUID != 0 )); then
+if [[ "$EUID" -ne 0 ]]; then
 	echo 'script must be run as root' >&2
 	exit 1
 fi
 
+cleanup=()  # append function names to this, will be called in reverse order
 cleanup() {
-	echo "Cleaning up..."
-	if [[ -n "$mount_point" ]]; then
-		umount "$mount_point"
-	fi
+	for (( i=${#cleanup[@]}-1 ; i>=0 ; i-- )) ; do
+		"${cleanup[i]}"
+	done
 }
 trap 'cleanup' EXIT
 
@@ -31,6 +31,10 @@ mount_point="/mnt/rootfs"
 mkdir "$mount_point"
 
 mount "$loop_device" "$mount_point"
+umount_loop_device() {
+	umount "$mount_point"
+}
+cleanup+=(umount_loop_device)
 
 pacman --noconfirm -Sy reflector
 
