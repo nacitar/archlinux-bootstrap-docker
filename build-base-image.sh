@@ -19,7 +19,6 @@ while (( "$#" )); do
 		-e|--essential-tools) ESSENTIAL_TOOLS=1;;
 		-d|--dev-tools) DEV_TOOLS=1;;
 		-c|--cross-dev-tools) CROSS_DEV_TOOLS=1;;
-		-r|--remove-bootstrap-base-image) REMOVE_BOOTSTRAP_BASE_IMAGE=1;;
 		--keep-base-docker-image) KEEP_BASE_DOCKER_IMAGE=1;;
 		--keep-docker-image) KEEP_DOCKER_IMAGE=1;;
 		--from-existing-base) FROM_EXISTING_BASE=1;;
@@ -60,23 +59,6 @@ export_docker_container_filesystem() {
 	fi
 }
 
-export_docker_image() {
-	if [[ $# -ne 2 ]]; then
-		echo "Usage: export_docker_image <image_name> <destination_tar_file>"
-	fi
-	set -e  # hack.. never do this if it might be called interactively
-	image_name="$1"
-	tar_file="$2"
-	# create temporary container
-	container_id="$(docker create "$image_name")"
-	# docker export unavoidably adds a .dockerenv, so it must be filtered out
-	docker export "$container_id" | tar --delete .dockerenv > "$tar_file"
-	if [[ -n "$SUDO_USER" ]]; then
-		chown "$SUDO_USER:$SUDO_USER" "$tar_file"
-	fi
-	# delete temporary container
-	docker rm -vf "$container_id"
-}
 # pacstrap needs a mount point, rather than simply a directory
 # thus a loop mount is used to appease this requirement
 tmp_dir="$(mktemp -d)"
@@ -103,11 +85,21 @@ if [[ "$FROM_EXISTING_BASE" -ne 1 ]]; then
 	cleanup+=(detach_loop_device)
 
 	bootstrap_base_image_name="archlinux:latest"
+	remove_bootstrap_base_image=1
+	# temporarily disable exiting immediately; need to check the exit code
+	set +e
+	if docker image inspect "$bootstrap_base_image_name" &>/dev/null; then
+		# Already had the image... don't want to remove it unless it was only added by us
+		remove_bootstrap_base_image=0
+	fi
+	# re-enable exiting immediately
+	set -e
+	
 	bootstrap_image_name="arch-bootstrap:latest"
 	docker build --no-cache -t "$bootstrap_image_name" -f arch-bootstrap.Dockerfile "$script_directory" 
 	remove_bootstrap_image() {
-		docker rmi "$bootstrap_image_name"
-		if [[ "$REMOVE_BOOTSTRAP_BASE_IMAGE" -eq 1 ]]; then
+		docker rmi -f "$bootstrap_image_name"
+		if [[ "$remove_bootstrap_base_image" -eq 1 ]]; then
 			docker rmi -f "$bootstrap_base_image_name"
 		fi
 	}
@@ -156,7 +148,7 @@ if [[ "$BASE_TAR" -ne 0 ]]; then
 		docker rm -vf "$temp_base_container_id"
 	}
 	cleanup+=(remove_temp_base_container)
-	export_docker_container_filesystem "$temp_base_container_id" "$PWD/archlinux_base_$run_date.tar"
+	export_docker_container_filesystem "$temp_base_container_id" "$PWD/archlinux-base-$run_date.tar"
 	unset cleanup[-1]  # if no throws yet, remove it early to free space
 	remove_temp_base_container
 fi
@@ -186,6 +178,4 @@ remove_temp_container() {
 	docker rm -vf "$temp_container_id"
 }
 cleanup+=(remove_temp_container)
-export_docker_container_filesystem "$temp_container_id" "$PWD/archlinux_$run_date.tar"
-
-exit 0
+export_docker_container_filesystem "$temp_container_id" "$PWD/archlinux-$run_date.tar"

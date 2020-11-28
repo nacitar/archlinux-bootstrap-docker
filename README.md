@@ -2,4 +2,4 @@
 Scripts to generate an archlinux wsl importable tar file from an ubuntu wsl2 terminal with docker.
 
 # Example Usage
-sudo ./build_base_image.sh --admin-user nacitar --essential-tools --dev-tools --cross-dev-tools --remove-bootstrap-base-image
+sudo ./build-base-image.sh --admin-user=tux --essential-tools --dev-tools --cross-dev-tools

@@ -5,6 +5,6 @@ ARG DEV_TOOLS
 ARG CROSS_DEV_TOOLS
 COPY configure-system.sh /
 RUN env
-RUN /configure-system.sh
+RUN bash /configure-system.sh
 RUN rm /configure-system.sh
 ENTRYPOINT bash

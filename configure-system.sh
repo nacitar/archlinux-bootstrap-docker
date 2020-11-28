@@ -14,10 +14,13 @@ fi
 
 DEFAULT_PASSWORD="archlinux"
 
-install_packages() {
-	set -e  # hack
-	pacman -Syu --noconfirm --needed "$@"
-}
+# update package db (y) and pacman
+pacman -Sy --noconfirm --needed pacman
+# select the 20 most recently synchronized HTTPS mirrors, sorted by download speed 
+pacman -S --noconfirm --needed reflector
+reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+# update the entire system
+pacman -Su --noconfirm
 
 # fixes errors like: D8AFDDA07A5B6EDFA7D8CCDAD6D055F927843F1C could not be locally signed.
 # https://www.archlinux.org/news/gnupg-21-and-the-pacman-keyring/
@@ -32,7 +35,7 @@ if [[ -n "$ADMIN_USER" ]]; then
 	useradd -m "$ADMIN_USER"
 	usermod -aG wheel "$ADMIN_USER"
 	echo "$ADMIN_USER:$DEFAULT_PASSWORD" | chpasswd
-	install_packages sudo shadow sed # shadow is for chpasswd
+	pacman -S --noconfirm --needed sudo shadow sed # shadow is for chpasswd
 
 	if grep "# %wheel ALL=(ALL) ALL" /etc/sudoers &>/dev/null; then
 		# uncomment it if in the expected form
@@ -60,7 +63,7 @@ if [[ "$ESSENTIAL_TOOLS" -eq 1 ]]; then
 		man man-db man-pages
 		tar gzip zip unzip
 	)
-	install_packages "${packages[@]}"
+	pacman -S --noconfirm --needed "${packages[@]}"
 fi
 
 if [[ "$DEV_TOOLS" -eq 1 ]]; then
@@ -69,7 +72,7 @@ if [[ "$DEV_TOOLS" -eq 1 ]]; then
 		make cmake
 		python-pip
 	)
-	install_packages "${packages[@]}"
+	pacman -S --noconfirm --needed "${packages[@]}"
 	pip install conan
 fi
 
@@ -77,7 +80,7 @@ if [[ "$CROSS_DEV_TOOLS" -eq 1 ]]; then
 	packages=(
 		avr-gcc mingw-w64-gcc
 	)
-	install_packages "${packages[@]}"
+	pacman -S --noconfirm --needed "${packages[@]}"
 fi
 
 # This will be a tmpfs, in actuality... clear out the temp files.
