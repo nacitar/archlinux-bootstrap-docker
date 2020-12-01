@@ -41,8 +41,6 @@ pacman -Sy --noconfirm --needed pacman
 # select the 20 most recently synchronized HTTPS mirrors, sorted by download speed 
 pacman -S --noconfirm --needed reflector
 reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
-# update the entire system
-pacman -Su --noconfirm
 # install the base system to the mount point
 pacman -S --noconfirm --needed arch-install-scripts
 pacstrap "$mount_point" base
