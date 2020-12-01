@@ -23,6 +23,8 @@ while (( "$#" )); do
 		--keep-docker-image) KEEP_DOCKER_IMAGE=1;;
 		--from-existing-base) FROM_EXISTING_BASE=1;;
 		--admin-user=*) ADMIN_USER=${1#*=};;
+		--no-docker-group) NO_DOCKER_GROUP=1;;
+		--wsl-hostname=*) WSL_HOSTNAME=${1#*=};;
 		-*) echo "unsupported flag: $1" >&2; exit 1;;
 		*) echo "unsupported positional argument: $1" >&2; exit 1;;
 	esac
@@ -160,6 +162,8 @@ arguments=(
 	-f "configure-system.Dockerfile"
 	"$script_directory"
 	--build-arg "ADMIN_USER=$ADMIN_USER"
+	--build-arg "NO_DOCKER_GROUP=$NO_DOCKER_GROUP"
+	--build-arg "WSL_HOSTNAME=$WSL_HOSTNAME"
 	--build-arg "ESSENTIAL_TOOLS=$ESSENTIAL_TOOLS"
 	--build-arg "DEV_TOOLS=$DEV_TOOLS"
 	--build-arg "CROSS_DEV_TOOLS=$CROSS_DEV_TOOLS"

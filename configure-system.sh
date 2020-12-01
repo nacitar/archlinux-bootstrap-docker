@@ -8,6 +8,8 @@ fi
 
 # FROM ENVIRONMENT
 # - ADMIN_USER
+# - NO_DOCKER_GROUP
+# - WSL_HOSTNAME
 # - ESSENTIAL_TOOLS
 # - DEV_TOOLS
 # - CROSS_DEV_TOOLS
@@ -48,11 +50,29 @@ if [[ -n "$ADMIN_USER" ]]; then
 			echo '%wheel ALL=(ALL) ALL'
 		) >> /etc/sudoers
 	fi
-
+	
+	if [[ "$NO_DOCKER_GROUP" -ne 1 ]]; then
+		# temporarily disable exiting immediately; don't care if this fails
+		set +e
+		groupadd docker &>/dev/null
+		# re-enable exiting immediately
+		set -e
+		usermod -aG docker "$ADMIN_USER"
+	fi
+	
 	(
 		echo '[user]'
 		echo "default=$ADMIN_USER"
-	) > /etc/wsl.conf
+		echo
+	) >> /etc/wsl.conf
+fi
+
+if [[ -n "$WSL_HOSTNAME" ]]; then
+	(
+		echo '[network]'
+		echo "hostname=$WSL_HOSTNAME"
+		echo
+	) >> /etc/wsl.conf
 fi
 
 if [[ "$ESSENTIAL_TOOLS" -eq 1 ]]; then
