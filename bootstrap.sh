@@ -38,9 +38,10 @@ cleanup+=(umount_loop_device)
 
 # update package db (y) and pacman
 pacman -Sy --noconfirm --needed pacman
-# select the 20 most recently synchronized HTTPS mirrors, sorted by download speed 
+# select the 20 most recently synchronized HTTPS mirrors, sorted by download speed; these will be copied by pacstrap
 pacman -S --noconfirm --needed reflector
-reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
-# install the base system to the mount point
+reflector --latest 20 --protocol https --sort rate --connection-timeout 2 --save /etc/pacman.d/mirrorlist
+# get the install scripts
 pacman -S --noconfirm --needed arch-install-scripts
-pacstrap "$mount_point" base
+# install the base system to the mount point (-G: don't copy pacman keyring)
+pacstrap -G "$mount_point" base

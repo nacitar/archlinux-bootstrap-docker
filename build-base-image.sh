@@ -11,7 +11,7 @@ fi
 script_directory="$(dirname "${BASH_SOURCE[0]}")"
 
 while (( "$#" )); do
-	while [[ "$1" == -[^-][^-]* ]]; do
+	while [[ "$1" =~ ^-[^-]{2,}$ ]]; do
 		set -- ${1::-1} "-${1: -1}" "${@:2}"  # split out multiflags
 	done
 	case "$1" in
@@ -98,7 +98,13 @@ if [[ "$FROM_EXISTING_BASE" -ne 1 ]]; then
 	set -e
 	
 	bootstrap_image_name="arch-bootstrap:latest"
-	docker build --no-cache -t "$bootstrap_image_name" -f arch-bootstrap.Dockerfile "$script_directory" 
+	arguments=(
+		build --no-cache
+		-t "$bootstrap_image_name"
+		-f arch-bootstrap.Dockerfile
+		"$script_directory"
+	)
+	docker "${arguments[@]}"
 	remove_bootstrap_image() {
 		docker rmi -f "$bootstrap_image_name"
 		if [[ "$remove_bootstrap_base_image" -eq 1 ]]; then

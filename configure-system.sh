@@ -18,9 +18,6 @@ DEFAULT_PASSWORD="archlinux"
 
 # update package db (y) and pacman
 pacman -Sy --noconfirm --needed pacman
-# select the 20 most recently synchronized HTTPS mirrors, sorted by download speed 
-pacman -S --noconfirm --needed reflector
-reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
 # update the entire system
 pacman -Su --noconfirm
 
@@ -77,6 +74,7 @@ fi
 
 if [[ "$ESSENTIAL_TOOLS" -eq 1 ]]; then
 	packages=(
+		reflector
 		procps-ng file which
 		sed gawk
 		neovim
