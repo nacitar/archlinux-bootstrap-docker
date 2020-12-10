@@ -19,12 +19,12 @@ while (( "$#" )); do
 		-e|--essential-tools) ESSENTIAL_TOOLS=1;;
 		-d|--dev-tools) DEV_TOOLS=1;;
 		-c|--cross-dev-tools) CROSS_DEV_TOOLS=1;;
-		--keep-base-docker-image) KEEP_BASE_DOCKER_IMAGE=1;;
-		--keep-docker-image) KEEP_DOCKER_IMAGE=1;;
-		--from-existing-base) FROM_EXISTING_BASE=1;;
 		--admin-user=*) ADMIN_USER=${1#*=};;
-		--no-docker-group) NO_DOCKER_GROUP=1;;
 		--wsl-hostname=*) WSL_HOSTNAME=${1#*=};;
+		--keep-image) KEEP_IMAGE=1;;
+		--reuse-base-image) REUSE_BASE_IMAGE=1;;
+		--reuse-pacstrap-image) REUSE_PACSTRAP_IMAGE=1;;
+		--no-docker-group) NO_DOCKER_GROUP=1;;
 		-*) echo "unsupported flag: $1" >&2; exit 1;;
 		*) echo "unsupported positional argument: $1" >&2; exit 1;;
 	esac
@@ -61,6 +61,10 @@ export_docker_container_filesystem() {
 	fi
 }
 
+has_docker_image() {
+	docker image inspect "$@" &>/dev/null
+}
+
 # pacstrap needs a mount point, rather than simply a directory
 # thus a loop mount is used to appease this requirement
 tmp_dir="$(mktemp -d)"
@@ -69,7 +73,9 @@ remove_tmp_dir() {
 }
 cleanup+=(remove_tmp_dir)
 
-if [[ "$FROM_EXISTING_BASE" -ne 1 ]]; then
+base_wsl_image_name="wsl-archlinux:base"
+# not reusing or can't because no base image exists
+if [[ "$REUSE_BASE_IMAGE" -ne 1 ]] || ! has_docker_image "$base_wsl_image_name"; then
 	# only needs enough space for the base pacstrap
 	rootfs="$tmp_dir/rootfs"
 	head -c 1G /dev/zero > "$rootfs"
@@ -86,34 +92,33 @@ if [[ "$FROM_EXISTING_BASE" -ne 1 ]]; then
 	}
 	cleanup+=(detach_loop_device)
 
-	bootstrap_base_image_name="archlinux:latest"
-	remove_bootstrap_base_image=1
-	# temporarily disable exiting immediately; need to check the exit code
-	set +e
-	if docker image inspect "$bootstrap_base_image_name" &>/dev/null; then
-		# Already had the image... don't want to remove it unless it was only added by us
-		remove_bootstrap_base_image=0
-	fi
-	# re-enable exiting immediately
-	set -e
-	
-	bootstrap_image_name="arch-bootstrap:latest"
-	arguments=(
-		build --no-cache
-		-t "$bootstrap_image_name"
-		-f arch-bootstrap.Dockerfile
-		"$script_directory"
-	)
-	docker "${arguments[@]}"
-	remove_bootstrap_image() {
-		docker rmi -f "$bootstrap_image_name"
-		if [[ "$remove_bootstrap_base_image" -eq 1 ]]; then
-			docker rmi -f "$bootstrap_base_image_name"
+	pacstrap_base_image_name="archlinux:latest"
+	pacstrap_image_name="pacstrap:latest"
+	if [[ "$REUSE_PACSTRAP_IMAGE" -ne 1 ]] || ! has_docker_image "$pacstrap_image_name"; then
+		remove_pacstrap_base_image=1
+		if has_docker_image "$pacstrap_base_image_name"; then
+			# Already had the image... don't want to remove it unless it was only added by us
+			remove_pacstrap_base_image=0
 		fi
-	}
-	cleanup+=(remove_bootstrap_image)
+		arguments=(
+			build --no-cache
+			-t "$pacstrap_image_name"
+			-f pacstrap.Dockerfile
+			"$script_directory"
+		)
+		docker "${arguments[@]}"
+		if [[ "$REUSE_PACSTRAP_IMAGE" -ne 1 ]]; then
+			remove_pacstrap_image() {
+				docker rmi -f "$pacstrap_image_name"
+				if [[ "$remove_pacstrap_base_image" -eq 1 ]]; then
+					docker rmi -f "$pacstrap_base_image_name"
+				fi
+			}
+			cleanup+=(remove_pacstrap_image)
+		fi
+	fi
 
-	docker run --rm --privileged "$bootstrap_image_name" "$loop_device"
+	docker run --rm --privileged "$pacstrap_image_name" "$loop_device"
 
 	mount_point="$tmp_dir/fsmount"
 	mkdir "$mount_point"  # can let the failure of the next command handle reporting
@@ -122,8 +127,6 @@ if [[ "$FROM_EXISTING_BASE" -ne 1 ]]; then
 		umount "$mount_point"
 	}
 	cleanup+=(umount_rootfs)
-
-	base_wsl_image_name="wsl-archlinux:base"
 
 	TAR_PARAMS=(
 		--xattrs
@@ -138,18 +141,16 @@ if [[ "$FROM_EXISTING_BASE" -ne 1 ]]; then
 		.  # CWD from line above
 	)
 	tar ${TAR_PARAMS[@]} | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
-	if [[ $KEEP_BASE_DOCKER_IMAGE -ne 1 ]]; then
+	if [[ "$REUSE_BASE_IMAGE" -ne 1 ]]; then
 		remove_base_docker_image() {
 			docker rmi -f "$base_wsl_image_name"
 		}
 		cleanup+=(remove_base_docker_image)
 	fi
-else
-	base_wsl_image_name="wsl-archlinux:base"
 fi
 
 run_date="$(date "+%Y%m%d")"
-if [[ "$BASE_TAR" -ne 0 ]]; then
+if [[ "$BASE_TAR" -eq 1 ]]; then
 	# need to create a container in order to export the filesystem
 	temp_base_container_id="$(docker create "$base_wsl_image_name")"
 	remove_temp_base_container() {
@@ -175,7 +176,7 @@ arguments=(
 	--build-arg "CROSS_DEV_TOOLS=$CROSS_DEV_TOOLS"
 )
 docker "${arguments[@]}"
-if [[ $KEEP_DOCKER_IMAGE -ne 1 ]]; then
+if [[ "$KEEP_IMAGE" -ne 1 ]]; then
 	remove_docker_image() {
 		docker rmi -f "$wsl_image_name"
 	}
