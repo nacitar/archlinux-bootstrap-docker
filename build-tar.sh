@@ -18,7 +18,9 @@ while (( "$#" )); do
 		-b|--base-tar) BASE_TAR=1;;
 		-e|--essential-tools) ESSENTIAL_TOOLS=1;;
 		-d|--dev-tools) DEV_TOOLS=1;;
+		-r|--rust-dev-tools) RUST_DEV_TOOLS=1;;
 		-c|--cross-dev-tools) CROSS_DEV_TOOLS=1;;
+		--no-win32yank) NO_WIN32YANK=1;;
 		--admin-user=*) ADMIN_USER=${1#*=};;
 		--wsl-hostname=*) WSL_HOSTNAME=${1#*=};;
 		--keep-image) KEEP_IMAGE=1;;
@@ -173,7 +175,9 @@ arguments=(
 	--build-arg "WSL_HOSTNAME=$WSL_HOSTNAME"
 	--build-arg "ESSENTIAL_TOOLS=$ESSENTIAL_TOOLS"
 	--build-arg "DEV_TOOLS=$DEV_TOOLS"
+	--build-arg "RUST_DEV_TOOLS=$RUST_DEV_TOOLS"
 	--build-arg "CROSS_DEV_TOOLS=$CROSS_DEV_TOOLS"
+	--build-arg "NO_WIN32YANK=$NO_WIN32YANK"
 )
 docker "${arguments[@]}"
 if [[ "$KEEP_IMAGE" -ne 1 ]]; then

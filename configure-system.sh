@@ -76,8 +76,8 @@ if [[ "$ESSENTIAL_TOOLS" -eq 1 ]]; then
 	packages=(
 		reflector
 		procps-ng file which
-		sed gawk
-		neovim
+		sed gawk diffutils colordiff
+		git neovim wget
 		man man-db man-pages
 		tar gzip zip unzip
 	)
@@ -86,9 +86,7 @@ fi
 
 if [[ "$DEV_TOOLS" -eq 1 ]]; then
 	packages=(
-		git gcc clang
-		make cmake
-		python-pip
+		gcc clang make cmake python-pip
 	)
 	pacman -S --noconfirm --needed "${packages[@]}"
 	pip install conan
@@ -100,6 +98,38 @@ if [[ "$CROSS_DEV_TOOLS" -eq 1 ]]; then
 	)
 	pacman -S --noconfirm --needed "${packages[@]}"
 fi
+
+installed_win32yank=0
+if [[ "$RUST_DEV_TOOLS" -eq 1 ]]; then
+	pacman -S --noconfirm --needed rustup
+	rustup install stable
+	rustup default stable
+	if [[ "$CROSS_DEV_TOOLS" -eq 1 ]]; then
+		windows_target=x86_64-pc-windows-gnu
+		rustup target add $windows_target
+		if [[ "$NO_WIN32YANK" -ne 1 ]]; then
+			# Build win32yank from source
+			tmp_build_dir="$(mktemp -d /tmp/win32yank.XXXXXXXXXX)"
+			tmp_output_dir="$tmp_build_dir/output"
+			pacman -S --noconfirm --needed git
+			git clone 'https://github.com/equalsraf/win32yank.git' "$tmp_build_dir"
+			cargo build --manifest-path="$tmp_build_dir/Cargo.toml" --release --target $windows_target --target-dir "$tmp_output_dir"
+			cp "$tmp_output_dir/x86_64-pc-windows-gnu/release/win32yank.exe" /usr/local/bin/
+			rm -rf "$tmp_build_dir"
+			installed_win32yank=1
+		fi
+	fi
+fi
+
+if [[ "$NO_WIN32YANK" -ne 1 && "$installed_win32yank" -ne 1 ]]; then
+	# Use the most recent win32yank release at the time of writing
+	pacman -S --noconfirm --needed wget unzip
+	tmp_zip="$(mktemp /tmp/win32yank.XXXXXXXXXX)"
+	wget 'https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip' -qO "$tmp_zip"
+	unzip "$tmp_zip" win32yank.exe -d /usr/local/bin
+	rm -f "$tmp_zip"
+fi
+
 
 # This will be a tmpfs, in actuality... clear out the temp files.
 rm -rf /run/*
