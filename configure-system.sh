@@ -87,6 +87,7 @@ fi
 if [[ "$DEV_TOOLS" -eq 1 ]]; then
 	packages=(
 		gcc clang make cmake python-pip
+		m4 automake
 	)
 	pacman -S --noconfirm --needed "${packages[@]}"
 	pip install conan
