@@ -8,7 +8,7 @@ if [[ "$EUID" -ne 0 ]]; then
 	exit 1
 fi
 
-script_directory="$(dirname "${BASH_SOURCE[0]}")"
+script_directory="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 
 while (( "$#" )); do
 	while [[ "$1" =~ ^-[^-]{2,}$ ]]; do
@@ -25,7 +25,6 @@ while (( "$#" )); do
 		--wsl-hostname=*) WSL_HOSTNAME=${1#*=};;
 		--keep-image) KEEP_IMAGE=1;;
 		--reuse-base-image) REUSE_BASE_IMAGE=1;;
-		--reuse-pacstrap-image) REUSE_PACSTRAP_IMAGE=1;;
 		--no-docker-group) NO_DOCKER_GROUP=1;;
 		-*) echo "unsupported flag: $1" >&2; exit 1;;
 		*) echo "unsupported positional argument: $1" >&2; exit 1;;
@@ -33,13 +32,14 @@ while (( "$#" )); do
 	shift
 done
 
-cleanup=()  # append function names to this, will be called in reverse order
+cleanup=()  # function names appended to this will be called in reverse order
 cleanup() {
 	for (( i=${#cleanup[@]}-1 ; i>=0 ; i-- )) ; do
 		"${cleanup[i]}"
 	done
 }
 trap 'cleanup' EXIT
+trap 'exit' INT
 
 export_docker_container_filesystem() {
 	if [[ $# -ne 2 ]]; then
@@ -62,7 +62,6 @@ export_docker_container_filesystem() {
 		chown "$SUDO_USER:$SUDO_USER" "$destination_tar_file"
 	fi
 }
-
 has_docker_image() {
 	docker image inspect "$@" &>/dev/null
 }
@@ -76,59 +75,35 @@ remove_tmp_dir() {
 cleanup+=(remove_tmp_dir)
 
 base_wsl_image_name="wsl-archlinux:base"
+relative_pacstrap_script="pacstrap_base_system.sh"
+pacstrap_script="$script_directory/$relative_pacstrap_script"
 # not reusing or can't because no base image exists
 if [[ "$REUSE_BASE_IMAGE" -ne 1 ]] || ! has_docker_image "$base_wsl_image_name"; then
-	# only needs enough space for the base pacstrap
-	rootfs="$tmp_dir/rootfs"
-	head -c 1G /dev/zero > "$rootfs"
-	remove_rootfs() {
-		rm "$rootfs"
-	}
-	cleanup+=(remove_rootfs)
-
-	mkfs.ext4 "$rootfs"
-
-	loop_device="$(losetup -f --show "$rootfs")"
-	detach_loop_device() {
-		losetup -d "$loop_device"
-	}
-	cleanup+=(detach_loop_device)
-
-	pacstrap_base_image_name="archlinux:latest"
-	pacstrap_image_name="pacstrap:latest"
-	if [[ "$REUSE_PACSTRAP_IMAGE" -ne 1 ]] || ! has_docker_image "$pacstrap_image_name"; then
-		remove_pacstrap_base_image=1
-		if has_docker_image "$pacstrap_base_image_name"; then
-			# Already had the image... don't want to remove it unless it was only added by us
-			remove_pacstrap_base_image=0
-		fi
-		arguments=(
-			build --no-cache
-			-t "$pacstrap_image_name"
-			-f pacstrap.Dockerfile
-			"$script_directory"
-		)
-		docker "${arguments[@]}"
-		if [[ "$REUSE_PACSTRAP_IMAGE" -ne 1 ]]; then
+	if [ -f /etc/arch-release ]; then
+		# on archlinux; can run the script directly 
+		"$pacstrap_script"
+	else
+		pacstrap_base_image_name="archlinux:latest"
+		if ! has_docker_image "$pacstrap_base_image_name"; then
+			# Didn't already have the image, so if it's there after it's because of us.
 			remove_pacstrap_image() {
-				docker rmi -f "$pacstrap_image_name"
-				if [[ "$remove_pacstrap_base_image" -eq 1 ]]; then
-					docker rmi -f "$pacstrap_base_image_name"
-				fi
+				docker rmi -f "$pacstrap_base_image_name"
 			}
 			cleanup+=(remove_pacstrap_image)
 		fi
+
+		rootfs_directory="$tmp_dir/rootfs"
+		arguments=(
+			run
+			--rm
+			--privileged
+			--mount "type=bind,src=$rootfs_directory,dst=/mnt/rootfs"
+			--mount "type=bind,src=$pacstrap_script,dst=/$relative_pacstrap_script"
+			"$pacstrap_base_image_name"
+			"/$relative_pacstrap_script"
+		)
+		docker "${arguments[@]}"
 	fi
-
-	docker run --rm --privileged "$pacstrap_image_name" "$loop_device"
-
-	mount_point="$tmp_dir/fsmount"
-	mkdir "$mount_point"  # can let the failure of the next command handle reporting
-	mount "$rootfs" "$mount_point"
-	umount_rootfs() {
-		umount "$mount_point"
-	}
-	cleanup+=(umount_rootfs)
 
 	TAR_PARAMS=(
 		--xattrs
@@ -139,10 +114,10 @@ if [[ "$REUSE_BASE_IMAGE" -ne 1 ]] || ! has_docker_image "$base_wsl_image_name";
 		--exclude=./{dev,mnt,proc,run,sys,tmp}/*
 		--exclude=./lost+found
 		--one-file-system
-		-C "$mount_point"
+		-C "$rootfs_directory"
 		.  # CWD from line above
 	)
-	tar ${TAR_PARAMS[@]} | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
+	tar "${TAR_PARAMS[@]}" | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
 	if [[ "$REUSE_BASE_IMAGE" -ne 1 ]]; then
 		remove_base_docker_image() {
 			docker rmi -f "$base_wsl_image_name"
