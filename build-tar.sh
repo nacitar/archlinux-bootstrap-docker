@@ -1,36 +1,43 @@
 #!/bin/bash
 
-# requires bash 4.2+ due to negative indexes
-set -e
-
-if [[ "$EUID" -ne 0 ]]; then
-	echo 'script must be run as root' >&2
-	exit 1
-fi
-
-script_directory="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
-
+script_path="$(realpath "${BASH_SOURCE[0]}")"
+script_directory="${script_path%/*}"
+error_messages=()
+unhandled_flags=()
 while (( "$#" )); do
 	while [[ "$1" =~ ^-[^-]{2,}$ ]]; do
 		set -- ${1::-1} "-${1: -1}" "${@:2}"  # split out multiflags
 	done
 	case "$1" in
 		-b|--base-tar) BASE_TAR=1;;
-		-e|--essential-tools) ESSENTIAL_TOOLS=1;;
-		-d|--dev-tools) DEV_TOOLS=1;;
-		-r|--rust-dev-tools) RUST_DEV_TOOLS=1;;
-		-c|--cross-dev-tools) CROSS_DEV_TOOLS=1;;
-		--no-win32yank) NO_WIN32YANK=1;;
-		--admin-user=*) ADMIN_USER=${1#*=};;
-		--wsl-hostname=*) WSL_HOSTNAME=${1#*=};;
 		--keep-image) KEEP_IMAGE=1;;
 		--reuse-base-image) REUSE_BASE_IMAGE=1;;
-		--no-docker-group) NO_DOCKER_GROUP=1;;
-		-*) echo "unsupported flag: $1" >&2; exit 1;;
-		*) echo "unsupported positional argument: $1" >&2; exit 1;;
+		--argument-check) ARGUMENT_CHECK=1;;
+		-*) unhandled_flags+=("$1");;
+		*) error_messages+=("unsupported positional argument: $1");;
 	esac
 	shift
 done
+# allow other script to validate unhandled flags
+child_script_argument_errors="$("$script_directory/configure-system.sh" --argument-check "${unhandled_flags[@]}" 1>/dev/null 2>&1)"
+if [[ -n $child_script_argument_errors ]]; then
+	error_messages+=("$child_script_argument_errors")
+fi
+if [[ ${#error_messages[@]} -gt 0 ]]; then
+	printf "%s\n" "${error_messages[@]}" >&2
+	exit 1
+fi
+if [[ $ARGUMENT_CHECK -eq 1 ]]; then
+	exit 0
+fi
+
+
+if [[ $EUID -ne 0 ]]; then
+	echo 'script must be run as root' >&2
+	exit 1
+fi
+
+set -e  # exit upon error
 
 cleanup=()  # function names appended to this will be called in reverse order
 cleanup() {
@@ -50,15 +57,15 @@ export_docker_container_filesystem() {
 	# docker export unavoidably adds a .dockerenv, so it must be filtered out
 	docker export "$container_id" | tar --delete .dockerenv > "$destination_tar_file"
 	export_status="${PIPESTATUS[0]}" tar_status="${PIPESTATUS[0]}"
-	if [[ "$export_status" -ne 0 ]]; then
+	if [[ $export_status -ne 0 ]]; then
 	       echo "error code $export_status when exporting container $container_id" >&2
 	       exit 1
 	fi
-	if [[ "$tar_status" -ne 0 ]]; then
+	if [[ $tar_status -ne 0 ]]; then
 	       echo "error code $tar_status when filtering out .dockerenv from export of container $container_id" >&2
 	       exit 1
 	fi
-	if [[ -n "$SUDO_USER" ]]; then
+	if [[ -n $SUDO_USER ]]; then
 		chown "$SUDO_USER:$SUDO_USER" "$destination_tar_file"
 	fi
 }
@@ -78,7 +85,7 @@ base_wsl_image_name="wsl-archlinux:base"
 relative_pacstrap_script="pacstrap_base_system.sh"
 pacstrap_script="$script_directory/$relative_pacstrap_script"
 # not reusing or can't because no base image exists
-if [[ "$REUSE_BASE_IMAGE" -ne 1 ]] || ! has_docker_image "$base_wsl_image_name"; then
+if [[ $REUSE_BASE_IMAGE -ne 1 ]] || ! has_docker_image "$base_wsl_image_name"; then
 	if [ -f /etc/arch-release ]; then
 		# on archlinux; can run the script directly 
 		"$pacstrap_script"
@@ -127,7 +134,7 @@ if [[ "$REUSE_BASE_IMAGE" -ne 1 ]] || ! has_docker_image "$base_wsl_image_name";
 fi
 
 run_date="$(date "+%Y%m%d")"
-if [[ "$BASE_TAR" -eq 1 ]]; then
+if [[ $BASE_TAR -eq 1 ]]; then
 	# need to create a container in order to export the filesystem
 	temp_base_container_id="$(docker create "$base_wsl_image_name")"
 	remove_temp_base_container() {
@@ -141,21 +148,23 @@ fi
 
 wsl_image_name="wsl-archlinux:latest"
 arguments=(
+	run
+	--rm
+	--privileged
+	--mount "type=bind,src=$rootfs_directory,dst=/mnt/rootfs"
+	--mount "type=bind,src=$pacstrap_script,dst=/$relative_pacstrap_script"
+	"$pacstrap_base_image_name"
+	"/$relative_pacstrap_script"
+)
+arguments=(
 	build --no-cache
 	-t "$wsl_image_name"
 	-f "configure-system.Dockerfile"
 	"$script_directory"
-	--build-arg "ADMIN_USER=$ADMIN_USER"
-	--build-arg "NO_DOCKER_GROUP=$NO_DOCKER_GROUP"
-	--build-arg "WSL_HOSTNAME=$WSL_HOSTNAME"
-	--build-arg "ESSENTIAL_TOOLS=$ESSENTIAL_TOOLS"
-	--build-arg "DEV_TOOLS=$DEV_TOOLS"
-	--build-arg "RUST_DEV_TOOLS=$RUST_DEV_TOOLS"
-	--build-arg "CROSS_DEV_TOOLS=$CROSS_DEV_TOOLS"
-	--build-arg "NO_WIN32YANK=$NO_WIN32YANK"
+	--build-arg ALL_ARGUMENTS="$(echo ${unhandled_flags[@]})"
 )
 docker "${arguments[@]}"
-if [[ "$KEEP_IMAGE" -ne 1 ]]; then
+if [[ $KEEP_IMAGE -ne 1 ]]; then
 	remove_docker_image() {
 		docker rmi -f "$wsl_image_name"
 	}

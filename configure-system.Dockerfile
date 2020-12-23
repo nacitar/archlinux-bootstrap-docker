@@ -1,14 +1,6 @@
 FROM wsl-archlinux:base
-ARG ADMIN_USER
-ARG NO_DOCKER_GROUP
-ARG WSL_HOSTNAME
-ARG ESSENTIAL_TOOLS
-ARG DEV_TOOLS
-ARG RUST_DEV_TOOLS
-ARG CROSS_DEV_TOOLS
-ARG NO_WIN32YANK
+ARG ALL_ARGUMENTS
 COPY configure-system.sh /
-RUN env
-RUN bash /configure-system.sh
+RUN bash /configure-system.sh ${ALL_ARGUMENTS}
 RUN rm /configure-system.sh
 ENTRYPOINT bash

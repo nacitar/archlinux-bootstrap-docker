@@ -1,18 +1,41 @@
 #!/bin/bash
-set -e
 
-if [[ "$EUID" -ne 0 ]]; then
-	echo 'script must be run as root' >&2
+script_path="$(realpath "${BASH_SOURCE[0]}")"
+script_directory="${script_path%/*}"
+error_messages=()
+while (( "$#" )); do
+	while [[ "$1" =~ ^-[^-]{2,}$ ]]; do
+		set -- ${1::-1} "-${1: -1}" "${@:2}"  # split out multiflags
+	done
+	case "$1" in
+		-e|--essential-tools) ESSENTIAL_TOOLS=1;;
+		-d|--dev-tools) DEV_TOOLS=1;;
+		-r|--rust-dev-tools) RUST_DEV_TOOLS=1;;
+		-c|--cross-dev-tools) CROSS_DEV_TOOLS=1;;
+		--no-win32yank) NO_WIN32YANK=1;;
+		--admin-user=*) ADMIN_USER=${1#*=};;
+		--wsl-hostname=*) WSL_HOSTNAME=${1#*=};;
+		--no-docker-group) NO_DOCKER_GROUP=1;;
+		--argument-check) ARGUMENT_CHECK=1;;
+		-*) error_messages+=("unsupported flag: $1");;
+		*) error_messages+=("unsupported positional argument: $1");;
+	esac
+	shift
+done
+if [[ ${#error_messages[@]} -gt 0 ]]; then
+	printf "%s\n" "${error_messages[@]}" >&2
 	exit 1
 fi
+if [[ $ARGUMENT_CHECK -eq 1 ]]; then
+	exit 0
+fi
 
-# FROM ENVIRONMENT
-# - ADMIN_USER
-# - NO_DOCKER_GROUP
-# - WSL_HOSTNAME
-# - ESSENTIAL_TOOLS
-# - DEV_TOOLS
-# - CROSS_DEV_TOOLS
+
+if [[ $EUID -ne 0 ]]; then
+	echo 'script must be run as root' >&2
+fi
+
+set -e  # exit upon error
 
 DEFAULT_PASSWORD="archlinux"
 
