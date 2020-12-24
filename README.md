@@ -2,4 +2,6 @@
 Scripts to generate an archlinux wsl importable tar file from an ubuntu wsl2 terminal with docker.
 
 # Example Usage
-sudo ./build-tar.sh --admin-user=tux --wsl-hostname=archlinux --essential-tools --dev-tools --rust-dev-tools --cross-dev-tools
+```
+wsl_user=nacitar; sudo ./build-tar.sh --essential-tools --dev-tools --rust-dev-tools --cross-dev-tools --win32yank --wheel-sudo --add-groups=wheel,docker --add-users="$wsl_user" --add-to-groups="$wsl_user":wheel,docker --wsl-default-user="$wsl_user" --wsl-hostname=archlinux
+```

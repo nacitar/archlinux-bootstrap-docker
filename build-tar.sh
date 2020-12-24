@@ -3,9 +3,10 @@
 script_path="$(realpath "${BASH_SOURCE[0]}")"
 script_directory="${script_path%/*}"
 error_messages=()
+
 unhandled_flags=()
-while (( "$#" )); do
-	while [[ "$1" =~ ^-[^-]{2,}$ ]]; do
+while (( $# )); do
+	while [[ $1 =~ ^-[^-]{2,}$ ]]; do
 		set -- ${1::-1} "-${1: -1}" "${@:2}"  # split out multiflags
 	done
 	case "$1" in
@@ -18,7 +19,11 @@ while (( "$#" )); do
 	esac
 	shift
 done
-# allow other script to validate unhandled flags
+# add forced flags for the configuration script
+unhandled_flags+=('--update-pacman')
+unhandled_flags+=('--generate-pacman-keyring')
+unhandled_flags+=('--force-setting-locale')
+# allow configuration script to validate unhandled flags
 child_script_argument_errors="$("$script_directory/configure-system.sh" --argument-check "${unhandled_flags[@]}" 1>/dev/null 2>&1)"
 if [[ -n $child_script_argument_errors ]]; then
 	error_messages+=("$child_script_argument_errors")
@@ -86,7 +91,7 @@ relative_pacstrap_script="pacstrap_base_system.sh"
 pacstrap_script="$script_directory/$relative_pacstrap_script"
 # not reusing or can't because no base image exists
 if [[ $REUSE_BASE_IMAGE -ne 1 ]] || ! has_docker_image "$base_wsl_image_name"; then
-	if [ -f /etc/arch-release ]; then
+	if [[ -f /etc/arch-release ]]; then
 		# on archlinux; can run the script directly 
 		"$pacstrap_script"
 	else
@@ -158,6 +163,7 @@ arguments=(
 )
 arguments=(
 	build --no-cache
+	--progress=plain  # so the step output isn't collapsed
 	-t "$wsl_image_name"
 	-f "configure-system.Dockerfile"
 	"$script_directory"
