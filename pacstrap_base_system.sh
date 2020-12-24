@@ -8,10 +8,10 @@ fi
 trap 'exit' INT
 
 rootfs_directory="$@"
-if [ -z "$rootfs_directory"]; then
+if [[ -z $rootfs_directory ]]; then
 	rootfs_directory="/mnt/rootfs"
 fi
-if ! [ -d "$rootfs_directory" ]; then
+if [[ ! -d $rootfs_directory ]]; then
 	echo "root directory does not exist: $rootfs_directory" >&2
 	exit 1
 fi
@@ -22,15 +22,15 @@ if [[ ! -d /run/shm ]]; then
 	mkdir /run/shm &> /dev/null
 fi
 
-# update package db (y) and pacman
+echo "Updating package db and pacman itself..."
 pacman -Sy --noconfirm --needed pacman
-# select the 20 most recently synchronized HTTPS mirrors, sorted by download speed; these will be copied by pacstrap
+echo "Installing reflector...  Likely to be slow as the mirror list hasn't yet been updated..."
 pacman -S --noconfirm --needed reflector
-echo ""
+echo ""  # to make the next message stand out more
 echo "Using reflector to generate an optimal mirror list...  Messages about timeouts are normal."
+# select the 20 most recently synchronized HTTPS mirrors, sorted by download speed; these will be copied by pacstrap
 reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
-echo ""
-# get the install scripts
+echo "Installing pacstrap..."
 pacman -S --noconfirm --needed arch-install-scripts
-# install the base system to the mount point (-G: don't copy pacman keyring)
+echo "Running pacstrap (without copying pacman keyring)..."
 pacstrap -G "$rootfs_directory" base

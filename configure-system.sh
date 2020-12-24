@@ -77,8 +77,6 @@ fi
 
 set -e  # exit upon error
 
-WSL_DEFAULT_USER_PASSWORD="archlinux"
-
 if [[ $UPDATE_PACMAN -eq 1 ]]; then
 	# update package db (y) and pacman
 	pacman -Sy --noconfirm --needed pacman

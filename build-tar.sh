@@ -14,6 +14,7 @@ while (( $# )); do
 		--keep-image) KEEP_IMAGE=1;;
 		--reuse-base-image) REUSE_BASE_IMAGE=1;;
 		--argument-check) ARGUMENT_CHECK=1;;
+		--temporary-working-directory=*) TEMPORARY_WORKING_DIRECTORY="${1#*=}";;
 		-*) unhandled_flags+=("$1");;
 		*) error_messages+=("unsupported positional argument: $1");;
 	esac
@@ -53,23 +54,78 @@ cleanup() {
 trap 'cleanup' EXIT
 trap 'exit' INT
 
+# Directory to house all script temporary work
+if [[ -z $TEMPORARY_WORKING_DIRECTORY ]]; then
+	TEMPORARY_WORKING_DIRECTORY="$(mktemp  -d)"
+fi
+if [[ ! -d $TEMPORARY_WORKING_DIRECTORY ]]; then
+	echo "Temporary working directory does not exist: $TEMPORARY_WORKING_DIRECTORY" >&2
+	exit 1
+fi
+if [[ -n "$(ls -A "$TEMPORARY_WORKING_DIRECTORY")" ]]; then
+	echo "Temporary working directory is not empty: $TEMPORARY_WORKING_DIRECTORY" >&2
+	echo 1
+fi
+remove_temporary_working_directory() {
+	rm -rf "$TEMPORARY_WORKING_DIRECTORY"
+}
+cleanup+=(remove_temporary_working_directory)
+
+COMMON_TAR_PARAMS=(
+	--xattrs --preserve-permissions --same-owner --numeric-owner
+)
+
 export_docker_container_filesystem() {
 	if [[ $# -ne 2 ]]; then
-		echo "Usage: export_docker_container_filesystem <container_id> <destination_tar_file>"
+		echo "Usage: export_docker_container_filesystem <container_id> <destination_tar_file>" >&2
+		exit 1
 	fi
-	container_id="$1"
-	destination_tar_file="$2"
+	local container_id="$1"
+	local destination_tar_file="$2"
+	local repack_dir="$TEMPORARY_WORKING_DIRECTORY/repack"
+	# directory must not already exist
+	mkdir "$repack_dir"
 	# docker export unavoidably adds a .dockerenv, so it must be filtered out
-	docker export "$container_id" | tar --delete .dockerenv > "$destination_tar_file"
-	export_status="${PIPESTATUS[0]}" tar_status="${PIPESTATUS[0]}"
-	if [[ $export_status -ne 0 ]]; then
-	       echo "error code $export_status when exporting container $container_id" >&2
-	       exit 1
+	local UNTAR_PARAMS=(
+		"${COMMON_TAR_PARAMS[@]}"
+		--extract
+	       	-C "$repack_dir"
+		--exclude='.dockerenv'
+	)
+	local TAR_PARAMS=(
+		"${COMMON_TAR_PARAMS[@]}"
+		--create
+		-C "$repack_dir"
+		.  # cwd from previous line
+		--transform='s,^\./,,'  # remove ./
+	)
+	# export to the repack directory
+	docker export "$container_id" | tar "${UNTAR_PARAMS[@]}"
+	if [[ ${PIPESTATUS[0]} -ne 0 || ${PIPESTATUS[1]} -ne 0 ]]; then
+		echo "Error when exporting container: $container_id" >&2
+		exit 1
 	fi
-	if [[ $tar_status -ne 0 ]]; then
-	       echo "error code $tar_status when filtering out .dockerenv from export of container $container_id" >&2
-	       exit 1
+
+	# re-package to a working tar
+	tar "${TAR_PARAMS[@]}" > $destination_tar_file
+	if [[ $? -ne 0 ]]; then
+		echo "Error when re-packaging tar file: $destination_tar_file" >&2
+		exit 1
 	fi
+	# free up now to reduce total disk overhead
+	rm -rf "$repack_dir"
+
+	# NOTE: not sure exactly what's going on, but if I don't repackage the tar and instead do this:
+	#	docker export "$container_id" | tar --delete .dockerenv > "$destination_tar_file"
+	# If you check, hard links are messed up
+	#	tar -tvf test2.tar | grep mkfs | grep "link to"
+	# You'll see lines such as:
+	#	hrwxr-xr-x 0/0               0 2020-09-19 13:51 usr/bin/mkfs.ext2 link to ca-certificates/extracted/cadir/Hellenic_Academic_and_Research_Institutions_ECC_RootCA_2015.pem
+	# Clearly, that is NOT the correct hard link.  It seems like, without repackaging the tar,
+	# doing lots of different operations on the exported tar results in corruption... not sure
+	# why, but this certainly avoids it.
+
+	# Fix permissions
 	if [[ -n $SUDO_USER ]]; then
 		chown "$SUDO_USER:$SUDO_USER" "$destination_tar_file"
 	fi
@@ -78,13 +134,6 @@ has_docker_image() {
 	docker image inspect "$@" &>/dev/null
 }
 
-# pacstrap needs a mount point, rather than simply a directory
-# thus a loop mount is used to appease this requirement
-tmp_dir="$(mktemp -d)"
-remove_tmp_dir() {
-	rm -rf "$tmp_dir"
-}
-cleanup+=(remove_tmp_dir)
 
 base_wsl_image_name="wsl-archlinux:base"
 relative_pacstrap_script="pacstrap_base_system.sh"
@@ -104,7 +153,8 @@ if [[ $REUSE_BASE_IMAGE -ne 1 ]] || ! has_docker_image "$base_wsl_image_name"; t
 			cleanup+=(remove_pacstrap_image)
 		fi
 
-		rootfs_directory="$tmp_dir/rootfs"
+		rootfs_directory="$TEMPORARY_WORKING_DIRECTORY/rootfs"
+		mkdir "$rootfs_directory"
 		arguments=(
 			run
 			--rm
@@ -117,11 +167,8 @@ if [[ $REUSE_BASE_IMAGE -ne 1 ]] || ! has_docker_image "$base_wsl_image_name"; t
 		docker "${arguments[@]}"
 	fi
 
-	TAR_PARAMS=(
-		--xattrs
-		--preserve-permissions
-		--same-owner
-		--numeric-owner
+	FULL_SYSTEM_TAR_PARAMS=(
+		"${COMMON_TAR_PARAMS[@]}"
 		--create
 		--exclude=./{dev,mnt,proc,run,sys,tmp}/*
 		--exclude=./lost+found
@@ -129,7 +176,9 @@ if [[ $REUSE_BASE_IMAGE -ne 1 ]] || ! has_docker_image "$base_wsl_image_name"; t
 		-C "$rootfs_directory"
 		.  # CWD from line above
 	)
-	tar "${TAR_PARAMS[@]}" | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
+	tar "${FULL_SYSTEM_TAR_PARAMS[@]}" | docker import --change "ENTRYPOINT [ \"bash\" ]" - $base_wsl_image_name
+	# once it is in docker, the source directory is no longer needed
+	rm -rf "$rootfs_directory"
 	if [[ "$REUSE_BASE_IMAGE" -ne 1 ]]; then
 		remove_base_docker_image() {
 			docker rmi -f "$base_wsl_image_name"
@@ -152,15 +201,6 @@ if [[ $BASE_TAR -eq 1 ]]; then
 fi
 
 wsl_image_name="wsl-archlinux:latest"
-arguments=(
-	run
-	--rm
-	--privileged
-	--mount "type=bind,src=$rootfs_directory,dst=/mnt/rootfs"
-	--mount "type=bind,src=$pacstrap_script,dst=/$relative_pacstrap_script"
-	"$pacstrap_base_image_name"
-	"/$relative_pacstrap_script"
-)
 arguments=(
 	build --no-cache
 	--progress=plain  # so the step output isn't collapsed
