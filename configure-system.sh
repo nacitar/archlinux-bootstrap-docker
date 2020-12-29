@@ -5,7 +5,7 @@ error_messages=()
 ADD_GROUPS=()
 ADD_USERS=()
 declare -A ADD_TO_GROUPS
-WSL_DEFAULT_USER_PASSWORD="archlinux" # default
+WSL_USER_PASSWORD="archlinux" # default
 while (($#)); do
   while [[ "${1}" =~ ^-[^-]{2,}$ ]]; do
     # split out multiflags
@@ -44,9 +44,16 @@ while (($#)); do
     --win32yank) WIN32YANK=1 ;;
     --wsl-clear-config) WSL_CLEAR_CONFIG=1 ;;
     # forces WHEEL_SUDO
-    --wsl-default-user=*) WSL_DEFAULT_USER="${1#*=}" ;;
-    --wsl-default-user-password=*) WSL_DEFAULT_USER_PASSWORD="${1#*=}" ;;
+    --wsl-user=*) WSL_USER="${1#*=}" ;;
+    --wsl-user-password=*) WSL_USER_PASSWORD="${1#*=}" ;;
     --wsl-hostname=*) WSL_HOSTNAME="${1#*=}" ;;
+    --wsl-docker) WSL_DOCKER=1 ;;
+    --wsl-ns-bashrc) WSL_NS_BASHRC=1 ;;
+    --wsl-ns-neovim-config) WSL_NS_NEOVIM_CONFIG=1 ;;
+    --wsl-ns-all)
+      set -- --wsl-docker --wsl-ns-bashrc --wsl-ns-neovim-config "${@:2}"
+      continue
+      ;;
     --argument-check) ARGUMENT_CHECK=1 ;;
     -*) error_messages+=("unsupported flag: ${1}") ;;
     *) error_messages+=("unsupported positional argument: ${1}") ;;
@@ -57,11 +64,16 @@ if [[ -z "${LOCALE_LANG}" && "${FORCE_SETTING_LOCALE}" -eq 1 ]]; then
   # default if forcing
   LOCALE_LANG='en_US.UTF-8'
 fi
-if [[ -n $WSL_DEFAULT_USER ]]; then
-  ADD_USERS+=("$WSL_DEFAULT_USER")
-  ADD_TO_GROUPS["$WSL_DEFAULT_USER"]+=',wheel'
+if [[ -n "${WSL_USER}" ]]; then
+  ADD_USERS+=("${WSL_USER}")
+  ADD_TO_GROUPS["${WSL_USER}"]+=',wheel'
   WHEEL_SUDO=1 # force this parameter on; WSL is useless otherwise
+  if [[ "${WSL_DOCKER}" -eq 1 ]]; then
+    ADD_GROUPS+=('docker')
+    ADD_TO_GROUPS["${WSL_USER}"]+=',docker'
+  fi
 fi
+
 if [[ ${#error_messages[@]} -gt 0 ]]; then
   printf "%s\n" "${error_messages[@]}" >&2
   exit 1
@@ -132,12 +144,6 @@ for user_name in "${ADD_USERS[@]}"; do
   if ! grep -q ^"${user_name}:" /etc/passwd; then
     echo "Adding user: ${user_name}"
     useradd -m "${user_name}"
-    if [[ "${user_name}" == "${WSL_DEFAULT_USER}" ]]; then
-      echo "- WSL default user, setting password to the default."
-      pacman -S --noconfirm --needed shadow # for chpasswd
-      echo "${user_name}:${WSL_DEFAULT_USER_PASSWORD}" | chpasswd
-    fi
-
   fi
 done
 for user_name in "${!ADD_TO_GROUPS[@]}"; do
@@ -166,10 +172,10 @@ if [[ -n "${WSL_HOSTNAME}" ]]; then
     echo "hostname=${WSL_HOSTNAME}"
     echo
   ) >>"${wsl_config}"
-  if [[ -n "${WSL_DEFAULT_USER}" ]]; then
+  if [[ -n "${WSL_USER}" ]]; then
     (
       echo '[user]'
-      echo "default=${WSL_DEFAULT_USER}"
+      echo "default=${WSL_USER}"
       echo
     ) >>"${wsl_config}"
   fi
@@ -233,6 +239,32 @@ if [[ "${WIN32YANK}" -eq 1 && "${installed_win32yank}" -ne 1 ]]; then
   wget 'https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip' -qO "${tmp_zip}"
   unzip "${tmp_zip}" 'win32yank.exe' -d /usr/local/bin
   rm -f "${tmp_zip}"
+fi
+
+if [[ -n "${WSL_USER}" ]]; then
+  echo "- Setting WSL user ${WSL_USER} password to the default."
+  pacman -S --noconfirm --needed shadow # for chpasswd
+  echo "${user_name}:${WSL_USER_PASSWORD}" | chpasswd
+  if [[ "${WSL_NS_BASHRC}" -eq 1 ]]; then
+###############################
+    su - "${user_name}" <<'EOF'
+set -e
+git clone 'https://github.com/nacitar/bashrc.git' "$HOME/.bash"
+"$HOME/.bash/install.sh"
+EOF
+###############################
+  fi
+  if [[ "${WSL_NS_NEOVIM_CONFIG}" -eq 1 ]]; then
+###############################
+    su - "${user_name}" <<'EOF'
+set -e
+config_dir="$HOME/.config/nvim"
+rm -rf "$config_dir"
+mkdir -p "$config_dir"
+git clone "https://github.com/nacitar/neovim-config.git" "$config_dir"
+EOF
+###############################
+  fi
 fi
 
 # This will be a tmpfs, in actuality... clear out the temp files.
