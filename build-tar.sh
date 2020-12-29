@@ -172,7 +172,7 @@ if [[ "${REUSE_BASE_IMAGE}" -ne 1 ]] || ! has_docker_image "${base_wsl_image_nam
     -C "${rootfs_directory}"
     . # CWD from line above
   )
-  tar "${FULL_SYSTEM_TAR_PARAMS[@]}" | docker import --change "ENTRYPOINT [ \"bash\" ]" - "${base_wsl_image_name}"
+  tar "${FULL_SYSTEM_TAR_PARAMS[@]}" | docker import --change "CMD /usr/bin/bash" - "${base_wsl_image_name}"
   # once it is in docker, the source directory is no longer needed
   rm -rf "${rootfs_directory}"
   if [[ "${REUSE_BASE_IMAGE}" -ne 1 ]]; then
