@@ -205,7 +205,8 @@ arguments=(
   -t "${wsl_image_name}"
   -f configure-system.Dockerfile
   "${script_directory}"
-  --build-arg ALL_ARGUMENTS="${unhandled_flags[@]}"
+  # NOTE: spaces in unhandled_flags would cause issues here
+  --build-arg ALL_ARGUMENTS="${unhandled_flags[*]}"
 )
 docker "${arguments[@]}"
 if [[ "${KEEP_IMAGE}" -ne 1 ]]; then

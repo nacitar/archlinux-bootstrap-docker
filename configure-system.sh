@@ -71,6 +71,7 @@ fi
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo 'script must be run as root' >&2
+  exit 1
 fi
 
 set -e # exit upon error
@@ -89,8 +90,16 @@ if [[ "${GENERATE_PACMAN_KEYRING}" -eq 1 ]]; then
 fi
 
 if [[ -n "${LOCALE_LANG}" ]]; then
-  echo "LANG=${LOCALE_LANG}" >/etc/locale.conf
+  if ! grep -qE ^"#?${LOCALE_LANG}( |$)" /etc/locale.gen; then
+    echo "cannot find specified locale lang in locale.gen: ${LOCALE_LANG}" >&2
+    exit 1
+  fi
+  # uncomment the locale in locale-gen if it's commented
+  sed "s/^#\(${LOCALE_LANG}\( \|$\)\)/\1/" -i /etc/locale.gen
+  # generate the locale
   locale-gen
+  # set the locale
+  echo "LANG=${LOCALE_LANG}" >/etc/locale.conf
 fi
 
 if [[ "${WHEEL_SUDO}" -eq 1 ]]; then
@@ -178,6 +187,7 @@ if [[ "${DEV_TOOLS}" -eq 1 ]]; then
   packages=(
     gcc clang make cmake python-pip
     m4 automake
+    shfmt shellcheck
   )
   pacman -S --noconfirm --needed "${packages[@]}"
   pip install conan
