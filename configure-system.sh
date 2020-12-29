@@ -8,7 +8,8 @@ declare -A ADD_TO_GROUPS
 WSL_DEFAULT_USER_PASSWORD="archlinux" # default
 while (($#)); do
   while [[ "${1}" =~ ^-[^-]{2,}$ ]]; do
-    set -- "${1::-1}" "-${1: -1}" "${@:2}" # split out multiflags
+    # split out multiflags
+    set -- "${1::-1}" "-${1: -1}" "${@:2}"
   done
   case "${1}" in
     -e | --essential-tools) ESSENTIAL_TOOLS=1 ;;
@@ -74,7 +75,10 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-set -e # exit upon error
+# exit upon error
+set -e
+
+trap 'exit' INT
 
 if [[ "${UPDATE_PACMAN}" -eq 1 ]]; then
   # update package db (y) and pacman

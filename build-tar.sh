@@ -7,10 +7,12 @@ error_messages=()
 unhandled_flags=()
 while (($#)); do
   while [[ "${1}" =~ ^-[^-]{2,}$ ]]; do
-    set -- "${1::-1}" "-${1: -1}" "${@:2}" # split out multiflags
+    # split out multiflags
+    set -- "${1::-1}" "-${1: -1}" "${@:2}"
   done
   case "${1}" in
     -k | --keep-image) KEEP_IMAGE=1 ;;
+    -m | --update-mirrorlist) UPDATE_MIRRORLIST_FLAG="${1}" ;;
     --reuse-base-image) REUSE_BASE_IMAGE=1 ;;
     --temporary-working-directory=*) TEMPORARY_WORKING_DIRECTORY="${1#*=}" ;;
     --argument-check) ARGUMENT_CHECK=1 ;;
@@ -41,7 +43,8 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-set -e # exit upon error
+# exit upon error
+set -e
 
 cleanup=() # function names appended to this will be called in reverse order
 cleanup() {
@@ -140,7 +143,8 @@ mkdir "${rootfs_directory}"
 if [[ "${REUSE_BASE_IMAGE}" -ne 1 ]] || ! has_docker_image "${base_wsl_image_name}"; then
   if [[ -f /etc/arch-release ]]; then
     # on archlinux; can run the script directly
-    "${pacstrap_script}" "${rootfs_directory}"
+    # don't update the mirrorlist; don't want to change the host system
+    "${pacstrap_script}" ${UPDATE_MIRRORLIST_FLAG} "${rootfs_directory}"
   else
     pacstrap_base_image_name="archlinux:latest"
     if ! has_docker_image "${pacstrap_base_image_name}"; then
@@ -158,7 +162,8 @@ if [[ "${REUSE_BASE_IMAGE}" -ne 1 ]] || ! has_docker_image "${base_wsl_image_nam
       --mount "type=bind,src=${rootfs_directory},dst=/mnt/rootfs"
       --mount "type=bind,src=${pacstrap_script},dst=/${relative_pacstrap_script}"
       "${pacstrap_base_image_name}"
-      "/${relative_pacstrap_script}"
+      # running in a container, so update the mirror list
+      "/${relative_pacstrap_script}" --update-mirrorlist "${rootfs_directory}"
     )
     docker "${arguments[@]}"
   fi
