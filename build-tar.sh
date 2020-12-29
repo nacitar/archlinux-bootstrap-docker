@@ -10,11 +10,10 @@ while (($#)); do
     set -- "${1::-1}" "-${1: -1}" "${@:2}" # split out multiflags
   done
   case "${1}" in
-    -b | --base-tar) BASE_TAR=1 ;;
-    --keep-image) KEEP_IMAGE=1 ;;
+    -k | --keep-image) KEEP_IMAGE=1 ;;
     --reuse-base-image) REUSE_BASE_IMAGE=1 ;;
-    --argument-check) ARGUMENT_CHECK=1 ;;
     --temporary-working-directory=*) TEMPORARY_WORKING_DIRECTORY="${1#*=}" ;;
+    --argument-check) ARGUMENT_CHECK=1 ;;
     -*) unhandled_flags+=("${1}") ;;
     *) error_messages+=("unsupported positional argument: ${1}") ;;
   esac
@@ -184,20 +183,6 @@ if [[ "${REUSE_BASE_IMAGE}" -ne 1 ]] || ! has_docker_image "${base_wsl_image_nam
   fi
 fi
 
-run_date="$(date '+%Y%m%d')"
-if [[ "${BASE_TAR}" -eq 1 ]]; then
-  # need to create a container in order to export the filesystem
-  temp_base_container_id="$(docker create "${base_wsl_image_name}")"
-  remove_temp_base_container() {
-    docker rm -vf "${temp_base_container_id}"
-  }
-  cleanup+=(remove_temp_base_container)
-  export_docker_container_filesystem "${temp_base_container_id}" "${PWD}/archlinux-base-${run_date}.tar"
-  # if no throws yet, remove it early to free space
-  unset 'cleanup[-1]'
-  remove_temp_base_container
-fi
-
 wsl_image_name='wsl-archlinux:latest'
 arguments=(
   build --no-cache
@@ -222,4 +207,5 @@ remove_temp_container() {
   docker rm -vf "${temp_container_id}"
 }
 cleanup+=(remove_temp_container)
-export_docker_container_filesystem "${temp_container_id}" "${PWD}/archlinux-${run_date}.tar"
+
+export_docker_container_filesystem "${temp_container_id}" "${PWD}/archlinux-$(date '+%Y%m%d').tar"

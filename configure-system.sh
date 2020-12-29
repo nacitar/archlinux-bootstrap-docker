@@ -156,19 +156,19 @@ if [[ "${WSL_CLEAR_CONFIG}" -eq 1 ]]; then
     rm -f "${wsl_config}"
   fi
 fi
-if [[ -n "${WSL_DEFAULT_USER}" ]]; then
-  (
-    echo '[user]'
-    echo "default=${WSL_DEFAULT_USER}"
-    echo
-  ) >>"${wsl_config}"
-fi
 if [[ -n "${WSL_HOSTNAME}" ]]; then
   (
     echo '[network]'
     echo "hostname=${WSL_HOSTNAME}"
     echo
   ) >>"${wsl_config}"
+  if [[ -n "${WSL_DEFAULT_USER}" ]]; then
+    (
+      echo '[user]'
+      echo "default=${WSL_DEFAULT_USER}"
+      echo
+    ) >>"${wsl_config}"
+  fi
 fi
 
 if [[ "${ESSENTIAL_TOOLS}" -eq 1 ]]; then
