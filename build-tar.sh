@@ -155,15 +155,16 @@ if [[ "${REUSE_BASE_IMAGE}" -ne 1 ]] || ! has_docker_image "${base_wsl_image_nam
       cleanup+=(remove_pacstrap_image)
     fi
 
+    container_rootfs_directory=/mnt/rootfs
     arguments=(
       run
       --rm
       --privileged
-      --mount "type=bind,src=${rootfs_directory},dst=/mnt/rootfs"
+      --mount "type=bind,src=${rootfs_directory},dst=${container_rootfs_directory}"
       --mount "type=bind,src=${pacstrap_script},dst=/${relative_pacstrap_script}"
       "${pacstrap_base_image_name}"
       # running in a container, so update the mirror list
-      "/${relative_pacstrap_script}" --update-mirrorlist "${rootfs_directory}"
+      "/${relative_pacstrap_script}" --update-mirrorlist "${container_rootfs_directory}"
     )
     docker "${arguments[@]}"
   fi
