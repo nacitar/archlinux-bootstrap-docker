@@ -98,7 +98,8 @@ if [[ "${UPDATE_PACMAN}" -eq 1 ]]; then
 fi
 
 if [[ "${GENERATE_PACMAN_KEYRING}" -eq 1 ]]; then
-  # fixes errors like: D8AFDDA07A5B6EDFA7D8CCDAD6D055F927843F1C could not be locally signed.
+  # fixes errors like:
+  # - D8AFDDA07A5B6EDFA7D8CCDAD6D055F927843F1C could not be locally signed.
   # https://www.archlinux.org/news/gnupg-21-and-the-pacman-keyring/
   rm -rf /etc/pacman.d/gnupg &>/dev/null
   pacman-key --init
@@ -183,7 +184,7 @@ fi
 
 if [[ "${ESSENTIAL_TOOLS}" -eq 1 ]]; then
   packages=(
-    reflector
+    reflector keychain
     procps-ng file which
     sed gawk diffutils colordiff
     git neovim wget
@@ -224,7 +225,14 @@ if [[ "${RUST_DEV_TOOLS}" -eq 1 ]]; then
       tmp_output_dir="${tmp_build_dir}/output"
       pacman -S --noconfirm --needed git
       git clone 'https://github.com/equalsraf/win32yank.git' "${tmp_build_dir}"
-      cargo build --manifest-path="${tmp_build_dir}/Cargo.toml" --release --target "${windows_target}" --target-dir "${tmp_output_dir}"
+      arguments=(
+        build
+        --manifest-path="${tmp_build_dir}/Cargo.toml"
+        --release
+        --target "${windows_target}"
+        --target-dir "${tmp_output_dir}"
+      )
+      cargo "${arguments[@]}"
       cp "${tmp_output_dir}/x86_64-pc-windows-gnu/release/win32yank.exe" /usr/local/bin/
       rm -rf "${tmp_build_dir}"
       installed_win32yank=1
