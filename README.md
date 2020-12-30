@@ -3,7 +3,7 @@ Scripts to generate an archlinux wsl importable tar file from an ubuntu wsl2 ter
 
 # Example Usage
 ```
-sudo ./build-tar.sh -edrc --win32yank --wsl-user='tux' --wsl-hostname='archlinux' -edrc --win32yank --wsl-ns-all
+sudo ./build-tar.sh -edrc --win32yank --wsl-user='tux' --wsl-hostname='archlinux' --wsl-ns-all
 ```
 If you want the final docker container to be kept, add --keep-image
 
