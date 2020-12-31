@@ -44,14 +44,31 @@ while (($#)); do
     --win32yank) WIN32YANK=1 ;;
     --wsl-clear-config) WSL_CLEAR_CONFIG=1 ;;
     # forces WHEEL_SUDO
-    --wsl-user=*) WSL_USER="${1#*=}" ;;
+    --wsl-user=*)
+      WSL_USER="${1#*=}"
+      # due to wsl being configured to start as this user, --wheel-sudo must
+      # be forced... otherwise the user has no way of elevating.
+      arguments=(
+        --wheel-sudo
+        --add-groups='wheel'
+        --add-users="${WSL_USER}"
+        --add-to-groups="${WSL_USER}:wheel"
+      )
+      set -- "${arguments[@]}" "${@:2}"
+      continue
+      ;;
     --wsl-user-password=*) WSL_USER_PASSWORD="${1#*=}" ;;
     --wsl-hostname=*) WSL_HOSTNAME="${1#*=}" ;;
     --wsl-docker) WSL_DOCKER=1 ;;
     --wsl-ns-bashrc) WSL_NS_BASHRC=1 ;;
     --wsl-ns-neovim-config) WSL_NS_NEOVIM_CONFIG=1 ;;
     --wsl-ns-all)
-      set -- --wsl-docker --wsl-ns-bashrc --wsl-ns-neovim-config "${@:2}"
+      arguments=(
+        --wsl-docker
+        --wsl-ns-bashrc
+        --wsl-ns-neovim-config
+      )
+      set -- "${arguments[@]}" "${@:2}"
       continue
       ;;
     --argument-check) ARGUMENT_CHECK=1 ;;
@@ -60,18 +77,15 @@ while (($#)); do
   esac
   shift
 done
+# default the LOCALE if it's being forced but is unspecified.
 if [[ -z "${LOCALE_LANG}" && "${FORCE_SETTING_LOCALE}" -eq 1 ]]; then
-  # default if forcing
   LOCALE_LANG='en_US.UTF-8'
 fi
-if [[ -n "${WSL_USER}" ]]; then
-  ADD_USERS+=("${WSL_USER}")
-  ADD_TO_GROUPS["${WSL_USER}"]+=',wheel'
-  WHEEL_SUDO=1 # force this parameter on; WSL is useless otherwise
-  if [[ "${WSL_DOCKER}" -eq 1 ]]; then
-    ADD_GROUPS+=('docker')
-    ADD_TO_GROUPS["${WSL_USER}"]+=',docker'
-  fi
+# actually apply WSL_DOCKER; couldn't in the switch because WSL_USER could
+# have come later in the arguments.
+if [[ -n "${WSL_USER}" && "${WSL_DOCKER}" -eq 1 ]]; then
+  ADD_GROUPS+=('docker')
+  ADD_TO_GROUPS["${WSL_USER}"]+=',docker'
 fi
 
 if [[ ${#error_messages[@]} -gt 0 ]]; then
