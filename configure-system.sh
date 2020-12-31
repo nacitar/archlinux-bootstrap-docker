@@ -198,7 +198,8 @@ fi
 
 if [[ "${ESSENTIAL_TOOLS}" -eq 1 ]]; then
   packages=(
-    reflector keychain openssh
+    reflector pacman-contrib
+    keychain openssh
     procps-ng file which
     sed gawk diffutils colordiff
     git neovim wget
