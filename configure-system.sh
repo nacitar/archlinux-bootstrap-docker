@@ -217,7 +217,7 @@ if [[ "${DEV_TOOLS}" -eq 1 ]]; then
     ccache doxygen graphviz
   )
   pacman -S --noconfirm --needed "${packages[@]}"
-  pip install conan
+  pip install conan cmake-format
 fi
 
 if [[ "${CROSS_DEV_TOOLS}" -eq 1 ]]; then
