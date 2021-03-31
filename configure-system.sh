@@ -201,7 +201,7 @@ if [[ "${ESSENTIAL_TOOLS}" -eq 1 ]]; then
     reflector pacman-contrib
     keychain openssh
     procps-ng file which
-    sed gawk diffutils colordiff
+    sed gawk diffutils colordiff patch
     git neovim wget
     man man-db man-pages
     tar gzip zip unzip
