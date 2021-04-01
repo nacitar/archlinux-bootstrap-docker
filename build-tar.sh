@@ -72,8 +72,12 @@ remove_temporary_working_directory() {
 }
 cleanup+=(remove_temporary_working_directory)
 
+# Documentation says --xattrs by default includes all attributes, but this is
+# only true of archive creation.  During extraction, if you don't specify to
+# include all attributes via '*' they are not set upon extraction.
+# See: https://stackoverflow.com/questions/42414607/tar-not-preserving-extended-attributes-of-trusted-namespace/44753270#44753270
 COMMON_TAR_PARAMS=(
-  --xattrs --preserve-permissions --same-owner --numeric-owner
+  --xattrs --xattrs-include='*' --preserve-permissions --same-owner --numeric-owner
 )
 
 export_docker_container_filesystem() {

@@ -198,7 +198,7 @@ fi
 
 if [[ "${ESSENTIAL_TOOLS}" -eq 1 ]]; then
   packages=(
-    reflector pacman-contrib
+    reflector pacman-contrib pkg-config
     keychain openssh
     procps-ng file which
     sed gawk diffutils colordiff patch
