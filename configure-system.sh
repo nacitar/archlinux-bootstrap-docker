@@ -196,6 +196,15 @@ if [[ -n "${WSL_HOSTNAME}" ]]; then
   fi
 fi
 
+# Unconditional packages; these may be part of the system profile, but make sure.
+packages=(
+  libcap iputils
+)
+pacman -S --noconfirm --needed "${packages[@]}"
+# Fix permissions to allow non-root users to ping.  The ping binary comes from
+# iputils, and that's a core system package... but it doesn't set this cap.
+setcap cap_net_raw+ep /usr/bin/ping
+
 if [[ "${ESSENTIAL_TOOLS}" -eq 1 ]]; then
   packages=(
     reflector pacman-contrib pkg-config
