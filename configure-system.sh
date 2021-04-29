@@ -15,6 +15,7 @@ while (($#)); do
     -d | --dev-tools) DEV_TOOLS=1 ;;
     -r | --rust-dev-tools) RUST_DEV_TOOLS=1 ;;
     -c | --cross-dev-tools) CROSS_DEV_TOOLS=1 ;;
+    -y | --win32yank) WIN32YANK=1 ;;
     --add-groups=*)
       IFS=',' read -r -a individual_groups <<<"${1#*=}"
       ADD_GROUPS+=("${individual_groups[@]}")
@@ -36,9 +37,7 @@ while (($#)); do
       ;;
     --locale-lang=*) LOCALE_LANG="${1#*=}" ;;
     # if specified with RUST_DEV_TOOLS and CROSS_DEV_TOOLS, builds from source
-    --win32yank) WIN32YANK=1 ;;
     --wsl-clear-config) WSL_CLEAR_CONFIG=1 ;;
-    # forces WHEEL_SUDO
     --wsl-user=*)
       WSL_USER="${1#*=}"
       arguments=(

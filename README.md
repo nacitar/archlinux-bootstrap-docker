@@ -3,7 +3,7 @@ Scripts to generate an archlinux wsl importable tar file from an ubuntu wsl2 ter
 
 # Example Usage
 ```
-sudo ./build-tar.sh --dev-tools --win32yank --wsl-user='tux' --wsl-hostname='archlinux' --wsl-ns-all
+sudo ./build-tar.sh -yd --wsl-user='tux' --wsl-hostname='archlinux' --wsl-ns-all
 ```
 If you are a rust developer, add -r or --rust-dev-tools
 If you want cross compilation tools, add -c or --cross-dev-tools
