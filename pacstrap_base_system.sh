@@ -36,6 +36,13 @@ fi
 # exit upon error
 set -e
 
+cleanup=() # function names appended to this will be called in reverse order
+cleanup() {
+  for ((i = ${#cleanup[@]} - 1; i >= 0; i--)); do
+    "${cleanup[i]}"
+  done
+}
+trap 'cleanup' EXIT
 trap 'exit' INT
 
 if [[ ! -d "${rootfs_directory}" ]]; then
@@ -65,5 +72,16 @@ echo ''
 echo 'Installing pacstrap...'
 pacman -S --noconfirm --needed arch-install-scripts
 echo ''
+# The archlinux:latest image at the time of writing has a lot of NoExtract entries
+# which remove tons of files, including man pages.  Remove those lines and use a
+# new config file for pacstrap so we get everything.
+temp_pacman_conf="$(mktemp '/tmp/pacman_conf_filtered.XXXXXXXXXX')"
+remove_temp_pacman_conf() {
+  if [[ -e "${temp_pacman_conf}" ]]; then
+    rm "${temp_pacman_conf}"
+  fi
+}
+cleanup+=(remove_temp_pacman_conf)
+sed 's/^\s*NoExtract\s*=.*$//g' /etc/pacman.conf > "${temp_pacman_conf}"
 echo 'Running pacstrap (without copying pacman keyring)...'
-pacstrap -G "${rootfs_directory}" base
+pacstrap -C "${temp_pacman_conf}" -G "${rootfs_directory}" base
