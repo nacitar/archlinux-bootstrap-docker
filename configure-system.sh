@@ -12,13 +12,9 @@ while (($#)); do
     set -- "${1::-1}" "-${1: -1}" "${@:2}"
   done
   case "${1}" in
-    -a | --aur-support) AUR_SUPPORT=1 ;;
     -d | --dev-tools) DEV_TOOLS=1 ;;
     -r | --rust-dev-tools) RUST_DEV_TOOLS=1 ;;
     -c | --cross-dev-tools) CROSS_DEV_TOOLS=1 ;;
-    -u | --update-pacman) UPDATE_PACMAN=1 ;;
-    -g | --generate-pacman-keyring) GENERATE_PACMAN_KEYRING=1 ;;
-    -w | --wheel-sudo) WHEEL_SUDO=1 ;;
     --add-groups=*)
       IFS=',' read -r -a individual_groups <<<"${1#*=}"
       ADD_GROUPS+=("${individual_groups[@]}")
@@ -39,18 +35,13 @@ while (($#)); do
       fi
       ;;
     --locale-lang=*) LOCALE_LANG="${1#*=}" ;;
-    --force-setting-locale) FORCE_SETTING_LOCALE=1 ;;
     # if specified with RUST_DEV_TOOLS and CROSS_DEV_TOOLS, builds from source
     --win32yank) WIN32YANK=1 ;;
     --wsl-clear-config) WSL_CLEAR_CONFIG=1 ;;
     # forces WHEEL_SUDO
     --wsl-user=*)
       WSL_USER="${1#*=}"
-      # due to wsl being configured to start as this user, --wheel-sudo must
-      # be forced... otherwise the user has no way of elevating.
       arguments=(
-        --wheel-sudo
-        --add-groups='wheel'
         --add-users="${WSL_USER}"
         --add-to-groups="${WSL_USER}:wheel"
       )
@@ -77,8 +68,8 @@ while (($#)); do
   esac
   shift
 done
-# default the LOCALE if it's being forced but is unspecified.
-if [[ -z "${LOCALE_LANG}" && "${FORCE_SETTING_LOCALE}" -eq 1 ]]; then
+# default the LOCALE if it is unspecified.
+if [[ -z "${LOCALE_LANG}" ]]; then
   LOCALE_LANG='en_US.UTF-8'
 fi
 # actually apply WSL_DOCKER; couldn't in the switch because WSL_USER could
@@ -113,71 +104,41 @@ cleanup() {
 trap 'cleanup' EXIT
 trap 'exit' INT
 
-if [[ "${UPDATE_PACMAN}" -eq 1 ]]; then
-  # update package db (y) and pacman
-  pacman -Sy --noconfirm --needed pacman
-fi
-
-if [[ "${GENERATE_PACMAN_KEYRING}" -eq 1 ]]; then
-  # fixes errors like:
-  # - D8AFDDA07A5B6EDFA7D8CCDAD6D055F927843F1C could not be locally signed.
-  # https://www.archlinux.org/news/gnupg-21-and-the-pacman-keyring/
-  rm -rf /etc/pacman.d/gnupg &>/dev/null
-  pacman-key --init
-  pacman-key --populate archlinux
-fi
-
-if [[ -n "${LOCALE_LANG}" ]]; then
-  if ! grep -qE ^"#?${LOCALE_LANG}( |$)" /etc/locale.gen; then
-    echo "cannot find specified locale lang in locale.gen: ${LOCALE_LANG}" >&2
-    exit 1
-  fi
-  # uncomment the locale in locale-gen if it's commented
-  sed "s/^#\(${LOCALE_LANG}\( \|$\)\)/\1/" -i /etc/locale.gen
-  # generate the locale
-  locale-gen
-  # set the locale
-  echo "LANG=${LOCALE_LANG}" >/etc/locale.conf
-fi
-
-# Unconditional packages
-packages=(
-  base-devel
-  pacman-contrib
-  libcap python python-pip
-  reflector
-  man man-db man-pages
-  keychain openssh
-  diffutils colordiff
-  zip unzip
-  git
-  neovim wget
-)
-pacman -S --noconfirm --needed "${packages[@]}"
-
 # Fix permissions to allow non-root users to ping.  The ping binary comes from
 # iputils, and that's a core system package... but it doesn't set this cap.
 setcap cap_net_raw+ep /usr/bin/ping
 
-# Install the wheel package so that python packages are packaged better.
-# This is unrelated to sudo/the wheel group, just named the same.
-python -m pip install wheel
+# update package db (y) and pacman
+pacman -Sy --noconfirm --needed pacman
 
-if [[ "${WHEEL_SUDO}" -eq 1 ]]; then
-  if grep -q ^"# %wheel ALL=(ALL) ALL"$ /etc/sudoers; then
-    # uncomment it if in the expected form
-    sed '/^# %wheel ALL=(ALL) ALL$/s/^# //g' -i /etc/sudoers
-  elif ! grep -q ^"%wheel ALL=(ALL) ALL"$ /etc/sudoers; then
-    # it's not already there, so append it
-    (
-      echo ''
-      echo '## Allow members of group wheel to execute any command'
-      echo '%wheel ALL=(ALL) ALL'
-    ) >>/etc/sudoers
-  fi
-  ADD_GROUPS+=("wheel") # just in case
+# fixes errors like:
+# - D8AFDDA07A5B6EDFA7D8CCDAD6D055F927843F1C could not be locally signed.
+# https://www.archlinux.org/news/gnupg-21-and-the-pacman-keyring/
+rm -rf /etc/pacman.d/gnupg &>/dev/null
+pacman-key --init
+pacman-key --populate archlinux
+
+# Set the locale
+if ! grep -qE ^"#?${LOCALE_LANG}( |$)" /etc/locale.gen; then
+	echo "cannot find specified locale lang in locale.gen: ${LOCALE_LANG}" >&2
+	exit 1
 fi
+# uncomment the locale in locale-gen if it's commented
+sed "s/^#\(${LOCALE_LANG}\( \|$\)\)/\1/" -i /etc/locale.gen
+# generate the locale
+locale-gen
+# set the locale
+echo "LANG=${LOCALE_LANG}" >/etc/locale.conf
 
+# Install sudo so the sudoers file is ready to be modified
+pacman -S --noconfirm --needed sudo
+
+# Give the wheel group access to sudo
+WHEEL_SUDOERS_FILE='/etc/sudoers.d/wheel'
+echo "%wheel ALL=(ALL) ALL" > "${WHEEL_SUDOERS_FILE}"
+
+# Add groups and users
+ADD_GROUPS+=("wheel")  # just in case
 for group_name in "${ADD_GROUPS[@]}"; do
   if ! grep -q ^"${group_name}:" /etc/group; then
     echo "Adding group: ${group_name}"
@@ -224,40 +185,73 @@ if [[ -n "${WSL_HOSTNAME}" ]]; then
     ) >>"${wsl_config}"
   fi
 fi
+pacman -S --noconfirm --needed python python-pip
 
-if [[ "${AUR_SUPPORT}" -eq 1 ]]; then
-  AUR_CACHE_DIRECTORY='/var/cache/pacman/aur'
-  AUR_CONFIG_FILE='/etc/pacman.d/aur'
-  NOBODY_SUDOERS_FILE='/etc/sudoers.d/nobody_pacman'
-  tmp_build_dir="$(mktemp -d '/tmp/aurutils.XXXXXXXXXX')"
-  git clone 'https://aur.archlinux.org/aurutils.git' "${tmp_build_dir}"
-  pushd "${tmp_build_dir}"
-  mkdir "${AUR_CACHE_DIRECTORY}"
-  # makepkg cannot be ran as root, so 'nobody' will be used
-  # and it needs access to the directory.
-  chown -R nobody:nobody .
-  echo "nobody ALL=(ALL) NOPASSWD: /usr/bin/pacman" > "${NOBODY_SUDOERS_FILE}"
-  remove_nobody_sudoers_file() {
-    if [[ -e "${NOBODY_SUDOERS_FILE}" ]]; then
-      rm "${NOBODY_SUDOERS_FILE}"
-    fi
-  }
-  cleanup+=(remove_nobody_sudoers_file)
-  sudo -u nobody makepkg -s --noconfirm
-  remove_nobody_sudoers_file  # early cleanup
-  package_file=(aurutils-*.pkg.tar.zst)
-  if [[ "${#package_file[@]}" -ne 1 ]]; then
-    echo "Expected exactly one package, but found ${#package_file[@]}: ${package_file[@]}" >&2
-    exit 1
-  fi
-  chown root:root "$package_file"
-  destination_package_file="${AUR_CACHE_DIRECTORY}/${package_file}"
-  mv "${package_file}" "${destination_package_file}"
-  popd
-  rm -rf "${tmp_build_dir}"
-  repo-add "${AUR_CACHE_DIRECTORY}/aur.db.tar.bz2" "$destination_package_file"
+# Install the wheel package so that python packages are packaged better.
+# This is unrelated to sudo/the wheel group, just named the same.
+python -m pip install wheel
 
-  cat <<EOF >"$AUR_CONFIG_FILE"
+packages=(
+  base-devel
+  pacman-contrib
+  reflector
+  man man-db man-pages
+  keychain openssh
+  diffutils colordiff
+  zip unzip
+  git
+  neovim wget
+)
+pacman -S --noconfirm --needed "${packages[@]}"
+
+AUR_CONFIG_FILE='/etc/pacman.d/aur'
+tmp_build_dir="$(mktemp -d '/tmp/aurutils.XXXXXXXXXX')"
+remove_tmp_build_dir() {
+	if [[ -e "${tmp_build_dir}" ]]; then
+		rm -rf "${tmp_build_dir}"
+	fi
+}
+cleanup+=(remove_tmp_build_dir)
+git clone 'https://aur.archlinux.org/aurutils.git' "${tmp_build_dir}"
+pushd "${tmp_build_dir}"
+# makepkg cannot be ran as root, so 'nobody' will be used
+# and it needs access to the directory.
+chown -R nobody:nobody .
+NOBODY_SUDOERS_FILE='/etc/sudoers.d/nobody_pacman'
+echo "nobody ALL=(ALL) NOPASSWD: /usr/sbin/pacman" > "${NOBODY_SUDOERS_FILE}"
+remove_nobody_sudoers_file() {
+	if [[ -e "${NOBODY_SUDOERS_FILE}" ]]; then
+		rm "${NOBODY_SUDOERS_FILE}"
+	fi
+}
+cleanup+=(remove_nobody_sudoers_file)
+su -s /bin/bash nobody -c "makepkg -s --noconfirm"
+remove_nobody_sudoers_file  # early cleanup
+package_file=(aurutils-*.pkg.tar.zst)
+if [[ "${#package_file[@]}" -ne 1 ]]; then
+	echo "Expected exactly one package, but found ${#package_file[@]}: ${package_file[@]}" >&2
+	exit 1
+fi
+# create the cache directory and give wheel access
+AUR_CACHE_DIRECTORY='/var/cache/pacman/aur'
+destination_package_file="${AUR_CACHE_DIRECTORY}/${package_file}"
+install -d -m 0775 -o root -g wheel "${AUR_CACHE_DIRECTORY}"
+# Make new files inherit the group owner of the cache directory
+# aur sync will write packages without the group, though,
+# making it so all wheel users can add packages and use them,
+# but users can't remove packages others built.
+chmod g+s "${AUR_CACHE_DIRECTORY}"
+# Set the default group permissions for newly created
+# files to rw and and directories rwx.
+setfacl -d -m g::rwX "${AUR_CACHE_DIRECTORY}"
+# Copy over the package file
+install -m 0664 -o root -g wheel "${package_file}" "${destination_package_file}"
+popd
+# early cleanup
+remove_tmp_build_dir
+repo-add "${AUR_CACHE_DIRECTORY}/aur.db.tar.bz2" "$destination_package_file"
+# configure pacman
+cat <<EOF >"$AUR_CONFIG_FILE"
 [options]
 # use the original CacheDir, but allow falling back to the AUR dir.
 CacheDir = /var/cache/pacman/pkg
@@ -268,15 +262,19 @@ CleanMethod = KeepCurrent
 SigLevel = Optional TrustAll
 Server = file://${AUR_CACHE_DIRECTORY}
 EOF
-  include_line="Include = ${AUR_CONFIG_FILE}"
-  # make sure the line isn't already present
-  if ! grep -q ^"${include_line}"$; then
-    # escape the forward slashes in the config path
-    sed "s/^\\s*\\[options\\]\\s*$/# enable AUR support\n${include_line//\//\\/}\n[options]/" -i /etc/pacman.conf
-  fi
-  pacman -Sy
-  pacman -S --noconfirm --needed aurutils
+include_line="Include = ${AUR_CONFIG_FILE}"
+# make sure the line isn't already present
+if ! grep -q ^"${include_line}"$; then
+	# escape the forward slashes in the config path
+	aur_comment="# enable AUR support.  aurutils uses the first file:\\/\\/ scheme Server entry, so this should be early."
+	sed "s/^\\s*\\[options\\]\\s*$/\n${aur_comment}\n${include_line//\//\\/}\n[options]/" -i /etc/pacman.conf
 fi
+pacman -Sy
+# aurutils uses vifm for previewing files
+pacman -S --noconfirm --needed aurutils vifm
+# whenever vifm is opened the first time it copies this config over to the
+# user's config, so this sets the default effectively.
+sed 's/^\(\s*set vicmd=\)vim\(\s*\)$/\1nvim\2/' -i /usr/share/vifm/vifmrc
 
 if [[ "${DEV_TOOLS}" -eq 1 ]]; then
   packages=(

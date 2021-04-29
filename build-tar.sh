@@ -21,10 +21,6 @@ while (($#)); do
   esac
   shift
 done
-# add forced flags for the configuration script
-unhandled_flags+=('--update-pacman')
-unhandled_flags+=('--generate-pacman-keyring')
-unhandled_flags+=('--force-setting-locale')
 # allow configuration script to validate unhandled flags
 child_script_argument_errors="$("${script_directory}/configure-system.sh" --argument-check "${unhandled_flags[@]}" 2>&1 1>/dev/null)"
 if [[ -n "${child_script_argument_errors}" ]]; then
