@@ -190,6 +190,9 @@ pacman -S --noconfirm --needed python python-pip
 # This is unrelated to sudo/the wheel group, just named the same.
 python -m pip install wheel
 
+# Virtually any python project will leave you wanting a virtualenv
+python -m pip install virtualenv
+
 packages=(
   base-devel
   pacman-contrib
