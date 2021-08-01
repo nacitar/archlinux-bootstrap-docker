@@ -106,6 +106,7 @@ trap 'exit' INT
 # Fix permissions to allow non-root users to ping.  The ping binary comes from
 # iputils, and that's a core system package... but it doesn't set this cap.
 setcap cap_net_raw+ep /usr/bin/ping
+mkdir -p /run/shm  # pacstrap needs this
 
 # update package db (y) and pacman
 pacman -Sy --noconfirm --needed pacman
@@ -231,12 +232,12 @@ su -s /bin/bash nobody -c "makepkg -s --noconfirm"
 remove_nobody_sudoers_file  # early cleanup
 package_file=(aurutils-*.pkg.tar.zst)
 if [[ "${#package_file[@]}" -ne 1 ]]; then
-	echo "Expected exactly one package, but found ${#package_file[@]}: ${package_file[@]}" >&2
+	echo "Expected exactly one package, but found ${#package_file[@]}: ${package_file[*]}" >&2
 	exit 1
 fi
 # create the cache directory and give wheel access
 AUR_CACHE_DIRECTORY='/var/cache/pacman/aur'
-destination_package_file="${AUR_CACHE_DIRECTORY}/${package_file}"
+destination_package_file="${AUR_CACHE_DIRECTORY}/${package_file[0]}"
 install -d -m 0775 -o root -g wheel "${AUR_CACHE_DIRECTORY}"
 # Make new files inherit the group owner of the cache directory
 # aur sync will write packages without the group, though,
@@ -247,7 +248,7 @@ chmod g+s "${AUR_CACHE_DIRECTORY}"
 # files to rw and and directories rwx.
 setfacl -d -m g::rwX "${AUR_CACHE_DIRECTORY}"
 # Copy over the package file
-install -m 0664 -o root -g wheel "${package_file}" "${destination_package_file}"
+install -m 0664 -o root -g wheel "${package_file[0]}" "${destination_package_file}"
 popd
 # early cleanup
 remove_tmp_build_dir
@@ -266,9 +267,9 @@ Server = file://${AUR_CACHE_DIRECTORY}
 EOF
 include_line="Include = ${AUR_CONFIG_FILE}"
 # make sure the line isn't already present
-if ! grep -q ^"${include_line}"$; then
+if ! grep -q ^"${include_line}"$ /etc/pacman.conf; then
 	# escape the forward slashes in the config path
-	aur_comment="# enable AUR support.  aurutils uses the first file:\\/\\/ scheme Server entry, so this should be early."
+	aur_comment="# AUR support:  aurutils uses the first file:\\/\\/ scheme Server entry."
 	sed "s/^\\s*\\[options\\]\\s*$/\n${aur_comment}\n${include_line//\//\\/}\n[options]/" -i /etc/pacman.conf
 fi
 pacman -Sy
@@ -356,6 +357,3 @@ EOF
 ###############################
   fi
 fi
-
-# This will be a tmpfs, in actuality... clear out the temp files.
-rm -rf /run/*
