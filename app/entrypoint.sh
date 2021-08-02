@@ -33,16 +33,20 @@ app_directory="${root_directory}/app"
 mkdir "${app_directory}"
 cp "${configure_system}" "${app_directory}/"
 
-original_resolv_conf="$(mktemp)"
-chroot_resolv_conf="${root_directory}/etc/resolv.conf"
-cp "${chroot_resolv_conf}" "${original_resolv_conf}" 
-cp /etc/resolv.conf "${chroot_resolv_conf}"
-# arch-chroot warns if the directory isn't a mount point
-mount --bind "${root_directory}" "${root_directory}"
-arch-chroot "${root_directory}" \
-    /usr/bin/env bash "/app/${configure_system##*/}" "$@"
-umount "${root_directory}"
-cp "${original_resolv_conf}" "${chroot_resolv_conf}"
+
+do_configure=0
+if [[ ${do_configure} -eq 1 ]]; then
+    original_resolv_conf="$(mktemp)"
+    chroot_resolv_conf="${root_directory}/etc/resolv.conf"
+    cp "${chroot_resolv_conf}" "${original_resolv_conf}" 
+    cp /etc/resolv.conf "${chroot_resolv_conf}"
+    # arch-chroot warns if the directory isn't a mount point
+    mount --bind "${root_directory}" "${root_directory}"
+    arch-chroot "${root_directory}" \
+        /usr/bin/env bash "/app/${configure_system##*/}" "$@"
+    umount "${root_directory}"
+    cp "${original_resolv_conf}" "${chroot_resolv_conf}"
+fi
 
 TAR_ARGUMENTS=(
     --xattrs --xattrs-include="*" --preserve-permissions
@@ -54,6 +58,6 @@ TAR_ARGUMENTS=(
     --gzip
     -C "${root_directory}"
     .  # CWD from previous line
-    --transform='s,^\./,,'  # remove ./
+    #--transform='s,^\./,,'  # remove ./
 )
 tar --file="${output_file}" "${TAR_ARGUMENTS[@]}" 
