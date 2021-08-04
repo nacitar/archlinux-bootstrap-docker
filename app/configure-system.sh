@@ -15,6 +15,7 @@ while (($#)); do
     -d | --dev-tools) DEV_TOOLS=1 ;;
     -r | --rust-dev-tools) RUST_DEV_TOOLS=1 ;;
     -c | --cross-dev-tools) CROSS_DEV_TOOLS=1 ;;
+    # if specified with RUST_DEV_TOOLS and CROSS_DEV_TOOLS, builds from source
     -y | --win32yank) WIN32YANK=1 ;;
     --add-groups=*)
       IFS=',' read -r -a individual_groups <<<"${1#*=}"
@@ -36,8 +37,6 @@ while (($#)); do
       fi
       ;;
     --locale-lang=*) LOCALE_LANG="${1#*=}" ;;
-    # if specified with RUST_DEV_TOOLS and CROSS_DEV_TOOLS, builds from source
-    --wsl-clear-config) WSL_CLEAR_CONFIG=1 ;;
     --wsl-user=*)
       WSL_USER="${1#*=}"
       arguments=(
@@ -106,7 +105,7 @@ trap 'exit' INT
 # Fix permissions to allow non-root users to ping.  The ping binary comes from
 # iputils, and that's a core system package... but it doesn't set this cap.
 setcap cap_net_raw+ep /usr/bin/ping
-mkdir -p /run/shm  # pacstrap needs this
+mkdir -p /run/shm  # at minimum, pacstrap needs this
 
 # update package db (y) and pacman
 pacman -Sy --noconfirm --needed pacman
@@ -166,11 +165,7 @@ for user_name in "${!ADD_TO_GROUPS[@]}"; do
 done
 
 wsl_config=/etc/wsl.conf
-if [[ "${WSL_CLEAR_CONFIG}" -eq 1 ]]; then
-  if [[ -e "${wsl_config}" ]]; then
-    rm -f "${wsl_config}"
-  fi
-fi
+true > "${wsl_config}"
 if [[ -n "${WSL_HOSTNAME}" ]]; then
   (
     echo '[network]'
@@ -199,11 +194,11 @@ packages=(
   pacman-contrib
   reflector
   man man-db man-pages
-  keychain openssh
+  keychain openssh wget
   diffutils colordiff
   zip unzip
   git
-  neovim wget
+  neovim
 )
 pacman -S --noconfirm --needed "${packages[@]}"
 
