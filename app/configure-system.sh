@@ -194,7 +194,7 @@ packages=(
   pacman-contrib
   reflector
   man man-db man-pages
-  keychain openssh wget
+  keychain openssh wget lsof
   diffutils colordiff
   zip unzip
   git
@@ -245,8 +245,7 @@ setfacl -d -m g::rwX "${AUR_CACHE_DIRECTORY}"
 # Copy over the package file
 install -m 0664 -o root -g wheel "${package_file[0]}" "${destination_package_file}"
 popd
-# early cleanup
-remove_tmp_build_dir
+remove_tmp_build_dir  # early cleanup
 repo-add "${AUR_CACHE_DIRECTORY}/aur.db.tar.bz2" "$destination_package_file"
 # configure pacman
 cat <<EOF >"$AUR_CONFIG_FILE"
@@ -352,3 +351,6 @@ EOF
 ###############################
   fi
 fi
+
+# Remove all non-current cached packages
+pacman -Sc --noconfirm

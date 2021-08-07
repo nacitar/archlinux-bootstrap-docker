@@ -6,7 +6,7 @@ script_path="$(realpath "${BASH_SOURCE[0]}")"
 script_directory="${script_path%/*}"
 
 cd /
-acl_file="base_system.acl"
+acl_file="system.acl"
 if [[ -s ${acl_file} ]]; then
     echo "Setting acls from ${acl_file}"
     setfacl --restore="${acl_file}"
