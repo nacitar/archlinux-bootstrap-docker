@@ -8,8 +8,7 @@ declare -A ADD_TO_GROUPS
 WSL_USER_PASSWORD="archlinux" # default
 while (($#)); do
   while [[ "${1}" =~ ^-[^-]{2,}$ ]]; do
-    # split out multiflags
-    set -- "${1::-1}" "-${1: -1}" "${@:2}"
+    set -- "${1::-1}" "-${1: -1}" "${@:2}"  # split multiflags
   done
   case "${1}" in
     -d | --dev-tools) DEV_TOOLS=1 ;;
@@ -72,7 +71,7 @@ if [[ -z "${LOCALE_LANG}" ]]; then
 fi
 # actually apply WSL_DOCKER; couldn't in the switch because WSL_USER could
 # have come later in the arguments.
-if [[ -n "${WSL_USER}" && "${WSL_DOCKER}" -eq 1 ]]; then
+if [[ -n ${WSL_USER} && ${WSL_DOCKER} -eq 1 ]]; then
   ADD_GROUPS+=('docker')
   ADD_TO_GROUPS["${WSL_USER}"]+=',docker'
 fi

@@ -42,51 +42,10 @@ if [[ ${do_configure} -eq 1 ]]; then
     cp "${original_resolv_conf}" "${chroot_resolv_conf}"
     rm -f "${root_directory}/${configure_system##*/}"
 fi
-# Instead of excluding from the tar, and then having to replicate the
-# same exclusions for getfacl, or filtering the output of getfacl,
-# simply deleting the unwanted files.
-excluded_directory_content=(dev mnt proc run sys tmp)
-for directory in "${excluded_directory_content[@]}"; do
-    directory="${root_directory}/${directory}"
-    shopt -s nullglob dotglob
-    for entry in "${directory}"/*; do
-        rm -rf "${entry}"
-    done
-    shopt -u nullglob dotglob
-done
-# Delete sockets; they are rightly ignored by tar, and unfortunately this
-# check breaks --remove-files, by leaving files in directories it tries to
-# later delete.
-find "${root_directory}" -type s -exec rm -f {} \;
 
-# Store any ACLs
-acl_file="$(mktemp)"
-pushd "${root_directory}" &>/dev/null
-getfacl --skip-base --recursive --one-file-system . > "${acl_file}"
-popd &>/dev/null
 
-if [[ -s ${acl_file} ]]; then
-    cp "${acl_file}" "${root_directory}/system.acl"
-    cp "${script_directory}/apply-acls.sh" "${root_directory}/"
-fi
+"${script_directory}/create-wsl-tarball.sh" \
+        --source-root="${root_directory}" \
+        --destination-tarball="${output_file}" \
+        --permissions-reference="${files_volume}"
 
-# tar output
-TAR_ARGUMENTS=(
-    --xattrs --xattrs-include="*"
-    --xattrs-exclude="system.posix_acl_access"
-    --xattrs-exclude="system.posix_acl_default"
-    --preserve-permissions
-    --numeric-owner --same-owner
-    --create
-    #--exclude=./{dev,mnt,proc,run,sys,tmp}/*
-    #--exclude=./lost+found
-    --one-file-system
-    -C "${root_directory}"
-    .  # CWD from previous line
-    --transform='s,^\./,,'  # remove ./
-)
-# write file with permissions in place, using the same owner as files_volume
-install -m 644 $(stat -c "-o %u -g %g" ${files_volume}) \
-    <(tar --remove-files "${TAR_ARGUMENTS[@]}" | gzip) \
-    "${output_file}"
-rm -rf "${root_directory}"
