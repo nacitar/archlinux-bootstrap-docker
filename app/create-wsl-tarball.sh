@@ -29,7 +29,7 @@ if [[ -z "${PERMISSIONS_REFERENCE}" ]]; then
     error_messages+=("No permissions reference specified.")
 else
     if [[ ! -e "${PERMISSIONS_REFERENCE}" ]]; then
-        error_messages+=("Reference file does not exist: ${PERMISSIONS_REFERENCE}")
+        error_messages+=("Permissions reference file does not exist: ${PERMISSIONS_REFERENCE}")
     fi
 fi
 if [[ ${#error_messages[@]} -gt 0 ]]; then
