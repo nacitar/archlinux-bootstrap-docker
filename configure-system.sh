@@ -2,10 +2,6 @@
 
 error_messages=()
 
-ADD_GROUPS=()
-ADD_USERS=()
-declare -A ADD_TO_GROUPS
-WSL_USER_PASSWORD="archlinux" # default
 while (($#)); do
   while [[ "${1}" =~ ^-[^-]{2,}$ ]]; do
     set -- "${1::-1}" "-${1: -1}" "${@:2}"  # split multiflags
@@ -16,38 +12,6 @@ while (($#)); do
     -c | --cross-dev-tools) CROSS_DEV_TOOLS=1 ;;
     # if specified with RUST_DEV_TOOLS and CROSS_DEV_TOOLS, builds from source
     -y | --win32yank) WIN32YANK=1 ;;
-    --add-groups=*)
-      IFS=',' read -r -a individual_groups <<<"${1#*=}"
-      ADD_GROUPS+=("${individual_groups[@]}")
-      ;;
-    --add-users=*)
-      IFS=',' read -r -a individual_users <<<"${1#*=}"
-      ADD_USERS+=("${individual_users[@]}")
-      ;;
-    --add-to-groups=*:*)
-      raw_value="${1#*=}"
-      if [[ "${raw_value}" == *:*:* ]]; then
-        error_messages+=("too many colon delimited sections in argument: ${1}")
-      else
-        IFS=',' read -r -a individual_users <<<"${raw_value%:*}"
-        for user_name in "${individual_users[@]}"; do
-          ADD_TO_GROUPS["$user_name"]+=",${raw_value#*:}"
-        done
-      fi
-      ;;
-    --locale-lang=*) LOCALE_LANG="${1#*=}" ;;
-    --wsl-user=*)
-      WSL_USER="${1#*=}"
-      arguments=(
-        --add-users="${WSL_USER}"
-        --add-to-groups="${WSL_USER}:wheel"
-      )
-      set -- "${arguments[@]}" "${@:2}"
-      continue
-      ;;
-    --wsl-user-password=*) WSL_USER_PASSWORD="${1#*=}" ;;
-    --wsl-hostname=*) WSL_HOSTNAME="${1#*=}" ;;
-    --wsl-docker) WSL_DOCKER=1 ;;
     --wsl-ns-bashrc) WSL_NS_BASHRC=1 ;;
     --wsl-ns-neovim-config) WSL_NS_NEOVIM_CONFIG=1 ;;
     --wsl-ns-all)
@@ -59,29 +23,15 @@ while (($#)); do
       set -- "${arguments[@]}" "${@:2}"
       continue
       ;;
-    --argument-check) ARGUMENT_CHECK=1 ;;
     -*) error_messages+=("unsupported flag: ${1}") ;;
     *) error_messages+=("unsupported positional argument: ${1}") ;;
   esac
   shift
 done
-# default the LOCALE if it is unspecified.
-if [[ -z "${LOCALE_LANG}" ]]; then
-  LOCALE_LANG='en_US.UTF-8'
-fi
-# actually apply WSL_DOCKER; couldn't in the switch because WSL_USER could
-# have come later in the arguments.
-if [[ -n ${WSL_USER} && ${WSL_DOCKER} -eq 1 ]]; then
-  ADD_GROUPS+=('docker')
-  ADD_TO_GROUPS["${WSL_USER}"]+=',docker'
-fi
 
 if [[ ${#error_messages[@]} -gt 0 ]]; then
   printf "%s\n" "${error_messages[@]}" >&2
   exit 1
-fi
-if [[ "${ARGUMENT_CHECK}" -eq 1 ]]; then
-  exit 0
 fi
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -101,98 +51,15 @@ cleanup() {
 trap 'cleanup' EXIT
 trap 'exit' INT
 
-# Fix permissions to allow non-root users to ping.  The ping binary comes from
-# iputils, and that's a core system package... but it doesn't set this cap.
-setcap cap_net_raw+ep /usr/bin/ping
-mkdir -p /run/shm  # at minimum, pacstrap needs this
-
 # update package db (y) and pacman
 pacman -Sy --noconfirm --needed pacman
-
-# fixes errors like:
-# - D8AFDDA07A5B6EDFA7D8CCDAD6D055F927843F1C could not be locally signed.
-# https://www.archlinux.org/news/gnupg-21-and-the-pacman-keyring/
-rm -rf /etc/pacman.d/gnupg &>/dev/null
-pacman-key --init
-pacman-key --populate archlinux
-
-# Set the locale
-if ! grep -qE ^"#?${LOCALE_LANG}( |$)" /etc/locale.gen; then
-	echo "cannot find specified locale lang in locale.gen: ${LOCALE_LANG}" >&2
-	exit 1
-fi
-# uncomment the locale in locale-gen if it's commented
-sed "s/^#\(${LOCALE_LANG}\( \|$\)\)/\1/" -i /etc/locale.gen
-# generate the locale
-locale-gen
-# set the locale
-echo "LANG=${LOCALE_LANG}" >/etc/locale.conf
-
-# Install sudo so the sudoers file is ready to be modified
-pacman -S --noconfirm --needed sudo
-
-# Give the wheel group access to sudo
-WHEEL_SUDOERS_FILE='/etc/sudoers.d/wheel'
-echo "%wheel ALL=(ALL) ALL" > "${WHEEL_SUDOERS_FILE}"
-
-# Add groups and users
-ADD_GROUPS+=("wheel")  # just in case
-for group_name in "${ADD_GROUPS[@]}"; do
-  if ! grep -q ^"${group_name}:" /etc/group; then
-    echo "Adding group: ${group_name}"
-    groupadd "${group_name}"
-  fi
-done
-for user_name in "${ADD_USERS[@]}"; do
-  if ! grep -q ^"${user_name}:" /etc/passwd; then
-    echo "Adding user: ${user_name}"
-    useradd -m "${user_name}"
-  fi
-done
-for user_name in "${!ADD_TO_GROUPS[@]}"; do
-  echo "Setting groups for user: ${user_name}"
-  # skipping first character in group list as it is a leading comma
-  IFS=',' read -r -a individual_groups <<<"${ADD_TO_GROUPS["${user_name}"]:1}"
-  for group_name in "${individual_groups[@]}"; do
-    group_line="$(grep ^"${group_name}:" /etc/group)"
-    group_members="${group_line##*:}"
-    if [[ ! "${group_members}" =~ (,|^)${user_name}(,|$) ]]; then
-      echo "- Group: ${group_name}"
-      usermod -aG "${group_name}" "${user_name}"
-    fi
-  done
-done
-
-wsl_config=/etc/wsl.conf
-true > "${wsl_config}"
-if [[ -n "${WSL_HOSTNAME}" ]]; then
-  (
-    echo '[network]'
-    echo "hostname=${WSL_HOSTNAME}"
-    echo
-  ) >>"${wsl_config}"
-  if [[ -n "${WSL_USER}" ]]; then
-    (
-      echo '[user]'
-      echo "default=${WSL_USER}"
-      echo
-    ) >>"${wsl_config}"
-  fi
-fi
-pacman -S --noconfirm --needed python python-pip
-
-# Install the wheel package so that python packages are packaged better.
-# This is unrelated to sudo/the wheel group, just named the same.
-python -m pip install wheel
 
 # Virtually any python project will leave you wanting a virtualenv
 python -m pip install virtualenv
 
 packages=(
   base-devel
-  pacman-contrib
-  reflector
-  man man-db man-pages
+  man-pages
   keychain openssh wget lsof
   diffutils colordiff
   zip unzip
@@ -325,6 +192,7 @@ if [[ "${WIN32YANK}" -eq 1 && "${installed_win32yank}" -ne 1 ]]; then
   rm -f "${tmp_zip}"
 fi
 
+# TODO: this will never be true; reworking things
 if [[ -n "${WSL_USER}" ]]; then
   echo "- Setting WSL user ${WSL_USER} password to the default."
   echo "${user_name}:${WSL_USER_PASSWORD}" | chpasswd
