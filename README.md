@@ -8,4 +8,8 @@ docker export <id>
 wsl import
 wsl rm /.dockerenv
 ```
-WIP
+# WIP
+Suggest using reflector:
+```
+reflector --country US --protocol https --age 24 --fastest 10 --sort rate --save /etc/pacman.d/mirrorlist
+```
