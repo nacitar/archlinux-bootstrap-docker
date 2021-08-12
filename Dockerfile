@@ -33,7 +33,7 @@ RUN set -eo pipefail \
 CMD ["/bin/bash"]
 
 FROM archlinux-base AS archlinux-configured
-ARG DEFAULT_USER=tux
+ARG ADMIN_USER=tux
 ARG DEFAULT_PASSWORD=archlinux
 ARG WSL_HOSTNAME
 ARG NO_DOCKER_GROUP
@@ -43,21 +43,21 @@ RUN set -eo pipefail \
     && pacman -S --noconfirm --needed reflector pacman-contrib \
     && mkdir -p /run/shm \
     && setcap cap_net_raw+ep /usr/bin/ping \
-    ; if [ -n "${DEFAULT_USER}" ]; then \
+    ; if [ -n "${ADMIN_USER}" ]; then \
         pacman -S --noconfirm --needed sudo \
         && echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel \
-        && useradd -G wheel -m "${DEFAULT_USER}" \
-        && printf '%s:%s' "${DEFAULT_USER}" "${DEFAULT_PASSWORD}" | chpasswd \
+        && useradd -G wheel -m "${ADMIN_USER}" \
+        && printf '%s:%s' "${ADMIN_USER}" "${DEFAULT_PASSWORD}" | chpasswd \
         ; if [ -z "${NO_DOCKER_GROUP}" ]; then \
             groupadd docker \
-            && usermod -aG docker "${DEFAULT_USER}" \
+            && usermod -aG docker "${ADMIN_USER}" \
         ; fi \
     ; fi \
     ; if [ -n "${WSL_HOSTNAME}" ]; then \
         ( \
             printf '%s\n' '[network]' "hostname=${WSL_HOSTNAME}" \
-            ; if [ -n "${DEFAULT_USER}" ]; then \
-                printf '\n%s\n' '[user]' "default=${DEFAULT_USER}" \
+            ; if [ -n "${ADMIN_USER}" ]; then \
+                printf '\n%s\n' '[user]' "default=${ADMIN_USER}" \
             ; fi \
         ) > /etc/wsl.conf \
     ; fi \
