@@ -3,7 +3,7 @@ ARG ADMIN_USER=tux
 ARG WSL_HOSTNAME
 
 FROM alpine AS bootstrap
-ARG MIRROR_URL="https://mirrors.ocf.berkeley.edu/archlinux"
+ARG MIRROR_URL="https://mirrors.rit.edu/archlinux"
 RUN set -euo pipefail \
     && checksum_line="$(set -euo pipefail \
             && wget -qO- "${MIRROR_URL}/iso/latest/sha1sums.txt" \
@@ -25,14 +25,13 @@ FROM scratch AS base
 ARG LOCALE_LANG="en_US.UTF-8"
 COPY --from=bootstrap /rootfs/ /
 RUN set -euo pipefail \
-    && rm -rf /etc/pacman.d/gnupg &>/dev/null \
     && pacman-key --init \
     && pacman-key --populate archlinux \
     && pacman -Syu --noconfirm --needed base \
-    && mkdir -p /run/shm \
     && sed "s/^#\(${LOCALE_LANG}\( \|$\)\)/\1/" -i /etc/locale.gen \
     && locale-gen \
     && echo "LANG=${LOCALE_LANG}" > /etc/locale.conf \
+    && setcap cap_net_raw+ep /usr/bin/ping \
     && pacman -Sc --noconfirm
 CMD ["/bin/bash"]
 
@@ -45,7 +44,6 @@ RUN set -euo pipefail \
     && pacman -S --noconfirm --needed python python-pip \
     && python -m pip install wheel \
     && pacman -S --noconfirm --needed reflector pacman-contrib sudo \
-    && setcap cap_net_raw+ep /usr/bin/ping \
     && echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel \
     && useradd -G wheel -m "${ADMIN_USER}" \
     && printf '%s:%s' "${ADMIN_USER}" "${DEFAULT_PASSWORD}" | chpasswd \
@@ -70,11 +68,11 @@ RUN set -euo pipefail \
     && pacman -S --noconfirm --needed git base-devel \
     && cache_directory=/var/cache/pacman/aur \
     && build_directory=/tmp/aurutils \
-    && install -d -m 775 -o "${ADMIN_USER}" -g "${ADMIN_USER}" \
+    && install -d -m 755 -o "${ADMIN_USER}" -g "${ADMIN_USER}" \
         "${cache_directory}" \
-    && makepkg_sudoers='/etc/sudoers.d/wheel_pacman_nopasswd' \
+    && makepkg_temporary_sudoers='/etc/sudoers.d/wheel_pacman_nopasswd' \
     && echo "%wheel ALL=(ALL) NOPASSWD: /usr/sbin/pacman" \
-        > "${makepkg_sudoers}" \
+        > "${makepkg_temporary_sudoers}" \
     && su "${ADMIN_USER}" -c "$(set -euo pipefail \
             && printf "%s\n" \
                 'set -euo pipefail' \
@@ -86,7 +84,7 @@ RUN set -euo pipefail \
                 "rm -rf '${build_directory}'" \
                 "repo-add '${cache_directory}/aur.db.tar.bz2' *.pkg.tar.zst" \
         )" \
-    && rm "${makepkg_sudoers}" \
+    && rm "${makepkg_temporary_sudoers}" \
     && aur_config=/etc/pacman.d/aur \
     && printf '%s\n' \
         '[options]' \
