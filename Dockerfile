@@ -62,10 +62,10 @@ RUN set -euo pipefail \
 
 FROM user AS aurutils
 ARG ADMIN_USER
-ARG AURUTILS_GIT="https://aur.archlinux.org/aurutils.git"
 ARG VIFM_VICMD="nvim"
 RUN set -euo pipefail \
     && pacman -S --noconfirm --needed git base-devel \
+    && aurutils_git=https://aur.archlinux.org/aurutils.git \
     && cache_directory=/var/cache/pacman/aur \
     && build_directory=/tmp/aurutils \
     && install -d -m 755 -o "${ADMIN_USER}" -g "${ADMIN_USER}" \
@@ -76,7 +76,7 @@ RUN set -euo pipefail \
     && su "${ADMIN_USER}" -c "$(set -euo pipefail \
             && printf "%s\n" \
                 'set -euo pipefail' \
-                "git clone '${AURUTILS_GIT}' '${build_directory}'" \
+                "git clone '${aurutils_git}' '${build_directory}'" \
                 "cd '${build_directory}'" \
                 'makepkg -s --noconfirm' \
                 "mv *.pkg.tar.zst '${cache_directory}/'" \
