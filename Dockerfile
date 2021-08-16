@@ -1,6 +1,5 @@
 # Accepts: base, user
 ARG ADMIN_USER=tux
-ARG WSL_HOSTNAME
 
 FROM alpine AS bootstrap
 ARG MIRROR_URL="https://mirrors.rit.edu/archlinux"
@@ -40,6 +39,7 @@ ARG ADMIN_USER
 ARG DEFAULT_PASSWORD=archlinux
 ARG WSL_HOSTNAME
 ARG NO_DOCKER_GROUP
+ARG WIN32YANK_VERSION="0.0.4"
 RUN set -euo pipefail \
     && pacman -S --noconfirm --needed python python-pip \
     && python -m pip install wheel \
@@ -57,12 +57,17 @@ RUN set -euo pipefail \
             '' \
             '[user]' "default=${ADMIN_USER}" \
             > /etc/wsl.conf \
+        && if [ -n "${WIN32YANK_VERSION:-}" ]; then \
+            base_url=https://github.com/equalsraf/win32yank/releases/download \
+            && version_base_url="${base_url}/v${WIN32YANK_VERSION}" \
+            && curl -L "${version_base_url}/win32yank-x64.zip" -o - \
+                | bsdtar -x -f - -C /usr/local/bin win32yank.exe \
+        ; fi \
     ; fi \
     && pacman -Sc --noconfirm
 
 FROM user AS aurutils
 ARG ADMIN_USER
-ARG VIFM_VICMD="nvim"
 RUN set -euo pipefail \
     && pacman -S --noconfirm --needed git base-devel \
     && aurutils_git=https://aur.archlinux.org/aurutils.git \
@@ -105,33 +110,22 @@ RUN set -euo pipefail \
     && sed 's/^\s*\(\[options\]\)\s*$/\n'"${content//\//\\/}"'\n\1/' \
         -i /etc/pacman.conf \
     && pacman -Sy --noconfirm \
-    && pacman -S --noconfirm --needed aurutils vifm \
-    && case "${VIFM_VICMD}" in \
-        vim) pacman -S --noconfirm --needed vim ;; \
-        nvim) pacman -S --noconfirm --needed neovim ;; \
-        *) echo "Unsupported vicmd: ${VIFM_VICMD}" >&2 \
-            && exit 1 ;; \
-    esac \
-    && if [ "${VIFM_VICMD}" != 'vim' ]; then \
-        sed 's/^\(\s*set vicmd=\)vim\(\s*\)$/\1'"${VIFM_VICMD}"'\2/' \
+    && pacman -S --noconfirm --needed aurutils vifm neovim \
+    && sed 's/^\(\s*set vicmd=\)vim\(\s*\)$/\1nvim\2/' \
             -i /usr/share/vifm/vifmrc \
-    ; fi \
     && pacman -Sc --noconfirm
 
 FROM aurutils AS nacitar
-ARG WSL_HOSTNAME
 ARG NO_DEV_TOOLS
 ARG NO_CROSS_DEV_TOOLS
 ARG NO_BASHRC
 ARG NO_NEOVIM_CONFIG
-ARG WIN32YANK_VERSION="v0.0.4"
 RUN set -euo pipefail \
     && python -m pip install virtualenv pipenv \
     && pacman -S --noconfirm --needed \
-        keychain openssh wget lsof \
+        keychain openssh lsof \
         diffutils colordiff \
         zip unzip \
-        neovim \
     && if [ -z "${NO_DEV_TOOLS:-}" ]; then \
         pacman -S --noconfirm --needed \
             clang cmake \
@@ -141,13 +135,6 @@ RUN set -euo pipefail \
     ; fi \
     && if [ -z "${NO_CROSS_DEV_TOOLS:-}" ]; then \
         pacman -S --noconfirm --needed avr-gcc mingw-w64-gcc \
-    ; fi \
-    && if [ -n "${WSL_HOSTNAME:-}" ] && [ -n "${WIN32YANK_VERSION:-}" ]; then \
-        base_url=https://github.com/equalsraf/win32yank/releases/download \
-        && release_url="${base_url}/${WIN32YANK_VERSION}/win32yank-x64.zip" \
-        && wget "${release_url}" -qO release.zip \
-        && unzip release.zip win32yank.exe -d /usr/local/bin \
-        && rm release.zip \
     ; fi \
     && if [ -z "${NO_BASHRC:-}" ]; then \
         bashrc_git=https://github.com/nacitar/bashrc.git \
