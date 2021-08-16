@@ -1,3 +1,0 @@
-# override user settings and force auto
-* text=auto !eol
-*.sh text eol=lf
