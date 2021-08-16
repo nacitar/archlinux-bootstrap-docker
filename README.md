@@ -84,6 +84,8 @@ pacman mirrorlist.  There's tons of ways to use this very versatile tool, but a
 simple and effective way to do so is to get the fastest mirrors within your
 country that have been recently updated.  One such command is:
 ```
-reflector --country US --protocol https \
+sudo reflector --country US --protocol https \
     --age 24 --fastest 10 --sort rate --save /etc/pacman.d/mirrorlist
 ```
+Note that reflector doesn't need root privileges to run, but it does in order
+to write to /etc/pacman.d/mirrorlist.
