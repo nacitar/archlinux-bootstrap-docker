@@ -1,4 +1,3 @@
-# Accepts: base, user
 ARG ADMIN_USER=tux
 
 FROM alpine AS bootstrap

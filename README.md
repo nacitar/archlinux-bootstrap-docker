@@ -1,8 +1,8 @@
 # archlinux-bootstrap-docker
 A Dockerfile that prepares an ArchLinux system from the bootstrap tarball
-provided by an ArchLinux mirror.  The Dockerfile is has several stages that
-can be directly targetted to control how much has been done to the resultant
-image.  Listed from least work to most work:
+provided by an ArchLinux mirror.  The Dockerfile has several stages that can be
+directly targeted to control how much has been done to the resultant image.
+Listed from least work to most work:
 - base: The bootstrap image with an initialized pacman keyring and the
 selected locale prepared.
 - user: The base configuration expanded to include extra pacman utilities,
