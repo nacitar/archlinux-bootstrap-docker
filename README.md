@@ -23,7 +23,7 @@ There are several build arguments that can be provided to customize the output
 image, but none are required and defaults are provided in the Dockerfile.
 
 - MIRROR\_URL: The base url of the pacman mirror to use.
-(Default: https://mirrors.rit.edu/archlinux)
+(Default: https://mnvoip.mm.fcix.net/archlinux)
 - ADMIN\_USER: A sudo-enabled non-root admin user to create. (Default: tux)
 - DEFAULT\_PASSWORD: The default password for the admin user. (Default:
 archlinux)
