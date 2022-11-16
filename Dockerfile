@@ -1,15 +1,15 @@
 ARG ADMIN_USER=tux
 
 FROM alpine AS bootstrap
-ARG MIRROR_URL="https://mirrors.rit.edu/archlinux"
+ARG MIRROR_URL="https://mnvoip.mm.fcix.net/archlinux"
 RUN set -euo pipefail \
     && checksum_line="$(set -euo pipefail \
-            && wget -qO- "${MIRROR_URL}/iso/latest/sha1sums.txt" \
+            && wget -qO- "${MIRROR_URL}/iso/latest/sha256sums.txt" \
                 | grep '\sarchlinux-bootstrap-\S\+-x86_64\.tar\.gz$' \
         )" \
     && tarball="${checksum_line##* }" \
     && wget "${MIRROR_URL}/iso/latest/${tarball}" \
-    && echo "${checksum_line}" | sha1sum -c \
+    && echo "${checksum_line}" | sha256sum -c \
     && mkdir /rootfs \
     && tar \
         --extract -z -f "${tarball}" \
@@ -40,9 +40,9 @@ ARG WSL_HOSTNAME
 ARG NO_DOCKER_GROUP
 ARG WIN32YANK_VERSION="0.0.4"
 RUN set -euo pipefail \
-    && pacman -S --noconfirm --needed python python-pip \
-    && python -m pip install wheel \
-    && pacman -S --noconfirm --needed reflector pacman-contrib sudo \
+    && pacman -S --noconfirm --needed \
+        python python-pip python-wheel python-virtualenv python-pipenv \
+        reflector pacman-contrib sudo \
     && echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel \
     && useradd -G wheel -m "${ADMIN_USER}" \
     && printf '%s:%s' "${ADMIN_USER}" "${DEFAULT_PASSWORD}" | chpasswd \
@@ -120,7 +120,6 @@ ARG NO_CROSS_DEV_TOOLS
 ARG NO_BASHRC
 ARG NO_NEOVIM_CONFIG
 RUN set -euo pipefail \
-    && python -m pip install virtualenv pipenv \
     && pacman -S --noconfirm --needed \
         keychain openssh lsof \
         diffutils colordiff \
@@ -130,7 +129,9 @@ RUN set -euo pipefail \
             clang cmake \
             shfmt shellcheck \
             ccache doxygen graphviz \
-        && python -m pip install conan cmake-format \
+        && su "${ADMIN_USER}" -c "$(set -euo pipefail \
+                && python -m pip install conan cmake-format \
+            )" \
     ; fi \
     && if [ -z "${NO_CROSS_DEV_TOOLS:-}" ]; then \
         pacman -S --noconfirm --needed avr-gcc mingw-w64-gcc \
