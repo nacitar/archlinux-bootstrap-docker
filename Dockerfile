@@ -65,56 +65,30 @@ RUN set -euo pipefail \
     ; fi \
     && pacman -Sc --noconfirm
 
-FROM user AS aurutils
+FROM user AS yay
 ARG ADMIN_USER
 RUN set -euo pipefail \
-    && pacman -S --noconfirm --needed git base-devel \
-    && aurutils_git=https://aur.archlinux.org/aurutils.git \
-    && cache_directory=/var/cache/pacman/aur \
-    && build_directory=/tmp/aurutils \
-    && install -d -m 755 -o "${ADMIN_USER}" -g "${ADMIN_USER}" \
-        "${cache_directory}" \
+    && pacman -S --noconfirm --needed git base-devel vifm neovim \
+    && sed 's/^\(\s*set vicmd=\)vim\(\s*\)$/\1nvim\2/' \
+            -i /usr/share/vifm/vifmrc \
+    && yay_git=https://aur.archlinux.org/yay.git \
+    && build_directory=/tmp/yay \
     && makepkg_temporary_sudoers='/etc/sudoers.d/wheel_pacman_nopasswd' \
     && echo "%wheel ALL=(ALL) NOPASSWD: /usr/sbin/pacman" \
         > "${makepkg_temporary_sudoers}" \
     && su "${ADMIN_USER}" -c "$(set -euo pipefail \
             && printf "%s\n" \
                 'set -euo pipefail' \
-                "git clone '${aurutils_git}' '${build_directory}'" \
+                "git clone '${yay_git}' '${build_directory}'" \
                 "cd '${build_directory}'" \
-                'makepkg -s --noconfirm' \
-                "mv *.pkg.tar.zst '${cache_directory}/'" \
-                "cd '${cache_directory}'" \
+                'makepkg -si --noconfirm' \
+                'cd -' \
                 "rm -rf '${build_directory}'" \
-                "repo-add '${cache_directory}/aur.db.tar.bz2' *.pkg.tar.zst" \
         )" \
     && rm "${makepkg_temporary_sudoers}" \
-    && aur_config=/etc/pacman.d/aur \
-    && printf '%s\n' \
-        '[options]' \
-        '# use original CacheDir but allow falling back to the AUR CacheDir' \
-        'CacheDir = /var/cache/pacman/pkg' \
-        "CacheDir = ${cache_directory}" \
-        'CleanMethod = KeepCurrent' \
-        '' \
-        '[aur]' \
-        'SigLevel = Optional TrustAll' \
-        "Server = file://${cache_directory}" \
-        > "${aur_config}" \
-    && content="$(set -euo pipefail \
-            && printf '%s\\n' \
-                '# AUR support: aurutils uses first file:// Server entry' \
-                "Include = ${aur_config}" \
-        )" \
-    && sed 's/^\s*\(\[options\]\)\s*$/\n'"${content//\//\\/}"'\n\1/' \
-        -i /etc/pacman.conf \
-    && pacman -Sy --noconfirm \
-    && pacman -S --noconfirm --needed aurutils vifm neovim \
-    && sed 's/^\(\s*set vicmd=\)vim\(\s*\)$/\1nvim\2/' \
-            -i /usr/share/vifm/vifmrc \
     && pacman -Sc --noconfirm
 
-FROM aurutils AS nacitar
+FROM yay AS nacitar
 ARG NO_DEV_TOOLS
 ARG NO_CROSS_DEV_TOOLS
 ARG NO_BASHRC
@@ -157,4 +131,6 @@ RUN set -euo pipefail \
     ; fi \
     && pacman -Sc --noconfirm
 
-FROM aurutils AS final
+FROM yay AS final
+#USER ${ADMIN_USER}
+#WORKDIR /home/${ADMIN_USER}

@@ -9,14 +9,14 @@ selected locale prepared.
 reflector to generate mirrorlists, and a sudo-enabled non-root admin user.  If
 WSL\_HOSTNAME is specified /etc/wsl.conf will also be configured and win32yank
 will be installed.
-- aurutils: The user configuration expanded to include aurutils configured to
+- yay: The user configuration expanded to include yay configured to
 work with the admin user.  Because makepkg uses vifm this also configures vifm
 to use neovim and installs neovim.
-- nacitar: The aurutils configuration expanded to include extra utilities that
+- nacitar: The yay configuration expanded to include extra utilities that
 the author of this repository finds useful and sets the admin user to use a
 particular bashrc and neovim config.
 
-The default target is aurutils.
+The default target is yay.
 
 # Build Arguments
 There are several build arguments that can be provided to customize the output
