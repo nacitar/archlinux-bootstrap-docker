@@ -2,12 +2,15 @@ ARG ADMIN_USER=tux
 
 FROM alpine AS bootstrap
 ARG MIRROR_URL="https://mnvoip.mm.fcix.net/archlinux"
+#ARG MIRROR_URL="https://geo.mirror.pkgbuild.com"
+#ARG MIRROR_URL="https://mirror.rackspace.com/archlinux"
+#ARG MIRROR_URL="https://mirror.leaseweb.net/archlinux"
 RUN set -euo pipefail \
+    && tarball="archlinux-bootstrap-x86_64.tar.gz" \
     && checksum_line="$(set -euo pipefail \
             && wget -qO- "${MIRROR_URL}/iso/latest/sha256sums.txt" \
-                | grep '\sarchlinux-bootstrap-\S\+-x86_64\.tar\.gz$' \
+                | grep "\s$(echo "${tarball}" | sed 's/\./\\\./g')\$" \
         )" \
-    && tarball="${checksum_line##* }" \
     && wget "${MIRROR_URL}/iso/latest/${tarball}" \
     && echo "${checksum_line}" | sha256sum -c \
     && mkdir /rootfs \

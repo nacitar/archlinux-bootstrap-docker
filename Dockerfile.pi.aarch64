@@ -1,0 +1,36 @@
+# docker buildx build --platform linux/arm64 .
+FROM --platform=linux/arm64 alpine AS bootstrap
+ARG PLATFORM="rpi-aarch64"
+ARG MIRROR_URL="http://mirror.archlinuxarm.org"
+RUN set -euo pipefail \
+    && tarball="ArchLinuxARM-${PLATFORM}-latest.tar.gz" \
+    && checksum_line="$(set -euo pipefail \
+            && wget -qO- "${MIRROR_URL}/os/${tarball}.md5" \
+                | grep "\s$(echo "${tarball}" | sed 's/\./\\\./g')\$" \
+        )" \
+    && wget "${MIRROR_URL}/os/${tarball}" \
+    && echo "${checksum_line}" | md5sum -c \
+    && mkdir /rootfs \
+    && tar \
+        --extract -z -f "${tarball}" \
+        --strip-components=1 --numeric-owner \
+        -C /rootfs \
+    && rm -f "${tarball}" /rootfs/README \
+    && echo "Server = ${MIRROR_URL}/\$arch/\$repo" \
+        > /rootfs/etc/pacman.d/mirrorlist
+
+FROM --platform=linux/arm64 scratch AS base
+ARG LOCALE_LANG="en_US.UTF-8"
+COPY --from=bootstrap /rootfs/ /
+RUN set -euo pipefail \
+    && pacman-key --init \
+    && pacman-key --populate archlinuxarm \
+    && pacman -Syu --noconfirm archlinux-keyring \
+    && pacman -Su --noconfirm --needed base \
+    && sed "s/^#\(${LOCALE_LANG}\( \|$\)\)/\1/" -i /etc/locale.gen \
+    && locale-gen \
+    && echo "LANG=${LOCALE_LANG}" > /etc/locale.conf \
+    && setcap cap_net_raw+ep /usr/bin/ping \
+    && pacman -Sc --noconfirm
+CMD ["/bin/bash"]
+
