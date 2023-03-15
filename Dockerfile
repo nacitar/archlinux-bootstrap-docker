@@ -40,8 +40,9 @@ ARG WSL_HOSTNAME
 ARG NO_DOCKER_GROUP
 ARG WIN32YANK_VERSION="0.0.4"
 RUN set -euo pipefail \
+    && pacman -S --noconfirm --needed python python-wheel \
     && pacman -S --noconfirm --needed \
-        python python-pip python-wheel python-virtualenv python-pipenv \
+        python-pip python-virtualenv python-pipenv \
         reflector pacman-contrib sudo \
     && echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel \
     && useradd -G wheel -m "${ADMIN_USER}" \
