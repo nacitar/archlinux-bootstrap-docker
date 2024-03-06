@@ -1,5 +1,3 @@
-ARG ADMIN_USER=tux
-
 FROM alpine AS bootstrap
 ARG MIRROR_URL="https://mnvoip.mm.fcix.net/archlinux"
 #ARG MIRROR_URL="https://geo.mirror.pkgbuild.com"
@@ -36,17 +34,27 @@ RUN set -euo pipefail \
     && pacman -Sc --noconfirm
 CMD ["/bin/bash"]
 
-FROM base AS user
-ARG ADMIN_USER
+FROM base AS final
+ARG ADMIN_USER=tux
 ARG DEFAULT_PASSWORD=archlinux
 ARG WSL_HOSTNAME
-ARG NO_DOCKER_GROUP
 ARG WIN32YANK_VERSION="0.0.4"
+ARG NO_DOCKER_GROUP
+ARG NO_BASHRC
+ARG NO_DEV_TOOLS
+ARG NO_CROSS_DEV_TOOLS
+ARG NO_NEOVIM_CONFIG
+ARG NO_YAY
+# installs 'python-wheel' early so python packages are tidier on disk
 RUN set -euo pipefail \
     && pacman -S --noconfirm --needed python python-wheel \
     && pacman -S --noconfirm --needed \
-        python-pip python-virtualenv python-pipenv \
-        reflector pacman-contrib sudo \
+        python-pip python-virtualenv python-pipx \
+        reflector pacman-contrib \
+        sudo git vifm neovim \
+        keychain openssh lsof \
+        diffutils colordiff less \
+        zip unzip \
     && echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel \
     && useradd -G wheel -m "${ADMIN_USER}" \
     && printf '%s:%s' "${ADMIN_USER}" "${DEFAULT_PASSWORD}" | chpasswd \
@@ -67,74 +75,55 @@ RUN set -euo pipefail \
                 | bsdtar -x -f - -C /usr/local/bin win32yank.exe \
         ; fi \
     ; fi \
-    && pacman -Sc --noconfirm
-
-FROM user AS yay
-ARG ADMIN_USER
-RUN set -euo pipefail \
-    && pacman -S --noconfirm --needed git base-devel vifm neovim \
     && sed 's/^\(\s*set vicmd=\)vim\(\s*\)$/\1nvim\2/' \
             -i /usr/share/vifm/vifmrc \
-    && yay_git=https://aur.archlinux.org/yay.git \
-    && build_directory=/tmp/yay \
-    && makepkg_temporary_sudoers='/etc/sudoers.d/wheel_pacman_nopasswd' \
-    && echo "%wheel ALL=(ALL) NOPASSWD: /usr/sbin/pacman" \
-        > "${makepkg_temporary_sudoers}" \
-    && su "${ADMIN_USER}" -c "$(set -euo pipefail \
-            && printf "%s\n" \
-                'set -euo pipefail' \
-                "git clone '${yay_git}' '${build_directory}'" \
-                "cd '${build_directory}'" \
-                'makepkg -si --noconfirm' \
-                'cd -' \
-                "rm -rf '${build_directory}'" \
-        )" \
-    && rm "${makepkg_temporary_sudoers}" \
-    && pacman -Sc --noconfirm
-
-FROM yay AS nacitar
-ARG NO_DEV_TOOLS
-ARG NO_CROSS_DEV_TOOLS
-ARG NO_BASHRC
-ARG NO_NEOVIM_CONFIG
-RUN set -euo pipefail \
-    && pacman -S --noconfirm --needed \
-        keychain openssh lsof \
-        diffutils colordiff \
-        zip unzip \
+    && if [ -z "${NO_BASHRC:-}" ]; then \
+        bashrc_git=https://github.com/nacitar/bashrc.git \
+        && su "${ADMIN_USER}" -c "set -euo pipefail \
+                && git clone '${bashrc_git}' \"\${HOME}/.bash\" \
+                && \"\${HOME}/.bash/install.sh\" \
+            " \
+    ; else \
+        su "${ADMIN_USER}" -c "python -m pipx ensurepath" \
+    ; fi \
     && if [ -z "${NO_DEV_TOOLS:-}" ]; then \
         pacman -S --noconfirm --needed \
-            clang cmake \
-            shfmt shellcheck \
-            ccache doxygen graphviz \
-        && su "${ADMIN_USER}" -c "$(set -euo pipefail \
-                && python -m pip install conan cmake-format \
-            )" \
+                python-poetry python-poetry-plugin-up python-pipenv \
+                base-devel clang cmake ccache doxygen \
+                shfmt shellcheck \
+        && su "${ADMIN_USER}" -c "set -euo pipefail \
+                && python -m pipx install conan \
+                && python -m pipx install --include-deps cmake-format \
+            " \
     ; fi \
     && if [ -z "${NO_CROSS_DEV_TOOLS:-}" ]; then \
         pacman -S --noconfirm --needed avr-gcc mingw-w64-gcc \
     ; fi \
-    && if [ -z "${NO_BASHRC:-}" ]; then \
-        bashrc_git=https://github.com/nacitar/bashrc.git \
-        && su "${ADMIN_USER}" -c "$(set -euo pipefail \
-                && printf "%s\n" \
-                    'set -euo pipefail' \
-                    'git clone '"${bashrc_git}"' "${HOME}/.bash"' \
-                    '${HOME}/.bash/install.sh' \
-            )" \
-    ; fi \
     && if [ -z "${NO_NEOVIM_CONFIG:-}" ]; then \
         neovim_config_git=https://github.com/nacitar/neovim-config.git \
-        && su "${ADMIN_USER}" -c "$(set -euo pipefail \
-                && printf "%s\n" \
-                    'set -euo pipefail' \
-                    'config_dir="${HOME}/.config/nvim"' \
-                    'git clone '"${neovim_config_git}"' "${config_dir}"' \
-                    '"${config_dir}/install_home_bin_forwarder.sh"' \
-            )" \
+        && su "${ADMIN_USER}" -c "set -euo pipefail \
+                    && config_dir=\"\${HOME}/.config/nvim\" \
+                    && git clone '${neovim_config_git}' \"\${config_dir}\" \
+                    && \"\${config_dir}/install_home_bin_forwarder.sh\" \
+            " \
+    ; fi \
+    && if [ -z "${NO_YAY:-}" ]; then \
+        pacman -S --noconfirm --needed base-devel \
+        && yay_git=https://aur.archlinux.org/yay.git \
+        && build_directory=/tmp/yay \
+        && makepkg_temporary_sudoers='/etc/sudoers.d/wheel_pacman_nopasswd' \
+        && echo "%wheel ALL=(ALL) NOPASSWD: /usr/sbin/pacman" \
+            > "${makepkg_temporary_sudoers}" \
+        && su "${ADMIN_USER}" -c "set -euo pipefail \
+                    && git clone '${yay_git}' '${build_directory}' \
+                    && cd '${build_directory}' \
+                    && makepkg -si --noconfirm \
+                    && cd - \
+                    && rm -rf '${build_directory}' \
+            " \
+        && rm "${makepkg_temporary_sudoers}" \
     ; fi \
     && pacman -Sc --noconfirm
-
-FROM yay AS final
-#USER ${ADMIN_USER}
-#WORKDIR /home/${ADMIN_USER}
+# Don't run as root
+USER ${ADMIN_USER}
+WORKDIR /home/${ADMIN_USER}

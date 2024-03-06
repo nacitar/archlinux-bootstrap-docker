@@ -1,44 +1,40 @@
 # archlinux-bootstrap-docker
 A Dockerfile that prepares an ArchLinux system from the bootstrap tarball
-provided by an ArchLinux mirror.  The Dockerfile has several stages that can be
-directly targeted to control how much has been done to the resultant image.
-Listed from least work to most work:
-- base: The bootstrap image with an initialized pacman keyring and the
-selected locale prepared.
-- user: The base configuration expanded to include extra pacman utilities,
-reflector to generate mirrorlists, and a sudo-enabled non-root admin user.  If
-WSL\_HOSTNAME is specified /etc/wsl.conf will also be configured and win32yank
-will be installed.
-- yay: The user configuration expanded to include yay configured to
-work with the admin user.  Because makepkg uses vifm this also configures vifm
-to use neovim and installs neovim.
-- nacitar: The yay configuration expanded to include extra utilities that
-the author of this repository finds useful and sets the admin user to use a
-particular bashrc and neovim config.
-
-The default target is yay.
+provided by an ArchLinux mirror.  The Dockerfile has a 'base' stage that can be
+directly targeted if you JUST want a base archlinux system without any extra
+configuration.
 
 # Build Arguments
 There are several build arguments that can be provided to customize the output
 image, but none are required and defaults are provided in the Dockerfile.
 
 - MIRROR\_URL: The base url of the pacman mirror to use.
-(Default: https://mnvoip.mm.fcix.net/archlinux)
+(Default: "https://mnvoip.mm.fcix.net/archlinux")
 - ADMIN\_USER: A sudo-enabled non-root admin user to create. (Default: tux)
 - DEFAULT\_PASSWORD: The default password for the admin user. (Default:
-archlinux)
-- LOCALE\_LANG: The locale to select (Default: en\_US.UTF-8)
+"archlinux")
+- LOCALE\_LANG: The locale to select (Default: "en\_US.UTF-8")
 - WSL\_HOSTNAME: If specified, /etc/wsl.conf will be created with the provided 
 hostname entry and the default user will also be set to the ADMIN\_USER.
+(Default: "")
 - WIN32YANK\_VERSION: When WSL\_HOSTNAME is specified the win32yank binary is
 installed in order to allow neovim's unnamedplus clipboard mode to access the
 windows system clipboard from within WSL.  If an empty string is specified this
-will be skipped. (Default: 0.0.4)
+will be skipped. (Default: "0.0.4")
 - NO\_DOCKER\_GROUP: If specified, the admin user will not be added to the
-docker group.
-
-There are other arguments for the nacitar stage, but they will not be
-documented.
+docker group. (Default: "")
+- NO\_BASHRC: If specified, my [bashrc](https://github.com/nacitar/bashrc)
+won't be installed for the admin user. (Default: "")
+- NO\_DEV\_TOOLS: If specified, various bash/python/c++ development tools won't
+be installed. (Default: "")
+- NO\_CROSS\_DEV\_TOOLS: If specified, various gcc cross-compilation toolchains
+won't be installed. Automatically set if NO\_DEV\_TOOLS is specified. (Default:
+"")
+- NO\_NEOVIM\_CONFIG: If specified, my
+[neovim config](https://github.com/nacitar/neovim-config) won't be installed
+for the admin user. (Default: "")
+- NO\_YAY: If specified, the AUR management utility "yay" won't be installed.
+(Default: "")
 
 # Example Usage
 The simplest use case is obtaining a docker image of an ArchLinux base system:
@@ -79,10 +75,11 @@ DEFAULT\_PASSWORD argument; arguments are stored as part of the image and it
 is best to avoid letting sensitive data into them.  Simply change the password
 manually once using the system within WSL or wherever you intend.
 
-All targets user and beyond have reflector installed for easily optimizing the
-pacman mirrorlist.  There's tons of ways to use this very versatile tool, but a
-simple and effective way to do so is to get the fastest mirrors within your
-country that have been recently updated.  One such command is:
+Unless building with the 'base' target, reflector will be installed for easily
+optimizing the pacman mirrorlist.  There's tons of ways to use this very
+versatile tool, but a simple and effective way to do so is to get the fastest
+mirrors within your country that have been recently updated.  One such command
+is:
 ```
 reflector --country US --protocol https \
     --age 24 --fastest 10 --sort rate | sudo tee /etc/pacman.d/mirrorlist
