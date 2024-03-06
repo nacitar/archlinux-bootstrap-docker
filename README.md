@@ -13,7 +13,7 @@ image, but none are required and defaults are provided in the Dockerfile.
 - ADMIN\_USER: A sudo-enabled non-root admin user to create. (Default: tux)
 - DEFAULT\_PASSWORD: The default password for the admin user. (Default:
 "archlinux")
-- LOCALE\_LANG: The locale to select (Default: "en\_US.UTF-8")
+- LOCALE\_LANG: The locale to select. (Default: "en\_US.UTF-8")
 - WSL\_HOSTNAME: If specified, /etc/wsl.conf will be created with the provided 
 hostname entry and the default user will also be set to the ADMIN\_USER.
 (Default: "")
