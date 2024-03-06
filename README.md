@@ -87,3 +87,11 @@ reflector --country US --protocol https \
 Reflector has a "--save" argument where you can provide an output file path,
 but because reflector DOES NOT require root privileges it's best to only give
 it when writing the file.
+
+# Upgrading
+Certain packages are installed for ONLY the admin user via "pipx", so in
+addition to updating your system via pacman, in order to update those you will
+need to run pipx as the admin user (*NOT root*).
+
+In order to list packages installed via pipx, you can run `pipx list` and to
+upgrade all packages installed that way you can run `pipx upgrade-all`.
