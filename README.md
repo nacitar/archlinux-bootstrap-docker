@@ -23,15 +23,15 @@ windows system clipboard from within WSL.  If an empty string is specified this
 will be skipped. (Default: "0.0.4")
 - NO\_DOCKER\_GROUP: If specified, the admin user will not be added to the
 docker group. (Default: "")
-- NO\_BASHRC: If specified, my [bashrc](https://github.com/nacitar/bashrc)
+- NO\_BASHRC: If specified, [my bashrc](https://github.com/nacitar/bashrc)
 won't be installed for the admin user. (Default: "")
 - NO\_DEV\_TOOLS: If specified, various bash/python/c++ development tools won't
 be installed. (Default: "")
 - NO\_CROSS\_DEV\_TOOLS: If specified, various gcc cross-compilation toolchains
 won't be installed. Automatically set if NO\_DEV\_TOOLS is specified. (Default:
 "")
-- NO\_NEOVIM\_CONFIG: If specified, my
-[neovim config](https://github.com/nacitar/neovim-config) won't be installed
+- NO\_NEOVIM\_CONFIG: If specified,
+[my neovim config](https://github.com/nacitar/neovim-config) won't be installed
 for the admin user. (Default: "")
 - NO\_YAY: If specified, the AUR management utility "yay" won't be installed.
 (Default: "")
