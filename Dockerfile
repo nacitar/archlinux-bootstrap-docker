@@ -1,8 +1,7 @@
+# NOTE: pacman's disk space checks are failing at build time, but not runtime,
+# so the checks are disabled then re-enabled after installing packages below.
 FROM alpine AS bootstrap
 ARG MIRROR_URL="https://mnvoip.mm.fcix.net/archlinux"
-#ARG MIRROR_URL="https://geo.mirror.pkgbuild.com"
-#ARG MIRROR_URL="https://mirror.rackspace.com/archlinux"
-#ARG MIRROR_URL="https://mirror.leaseweb.net/archlinux"
 RUN set -euo pipefail \
     && tarball="archlinux-bootstrap-x86_64.tar.gz" \
     && checksum_line="$(set -euo pipefail \
@@ -26,12 +25,14 @@ COPY --from=bootstrap /rootfs/ /
 RUN set -euo pipefail \
     && pacman-key --init \
     && pacman-key --populate archlinux \
+    && sed -E 's/^(CheckSpace)$/#\1/' -i /etc/pacman.conf \
     && pacman -Syu --noconfirm --needed base \
     && sed "s/^#\(${LOCALE_LANG}\( \|$\)\)/\1/" -i /etc/locale.gen \
     && locale-gen \
     && echo "LANG=${LOCALE_LANG}" > /etc/locale.conf \
     && setcap cap_net_raw+ep /usr/bin/ping \
-    && pacman -Sc --noconfirm
+    && pacman -Sc --noconfirm \
+    && sed -E 's/^#(CheckSpace)$/\1/' -i /etc/pacman.conf
 CMD ["/bin/bash"]
 
 FROM base AS final
@@ -47,6 +48,7 @@ ARG NO_NEOVIM_CONFIG
 ARG NO_YAY
 # installs 'python-wheel' early so python packages are tidier on disk
 RUN set -euo pipefail \
+    && sed -E 's/^(CheckSpace)$/#\1/' -i /etc/pacman.conf \
     && pacman -S --noconfirm --needed python python-wheel \
     && pacman -S --noconfirm --needed \
         python-pip python-virtualenv python-pipx \
@@ -123,7 +125,8 @@ RUN set -euo pipefail \
             " \
         && rm "${makepkg_temporary_sudoers}" \
     ; fi \
-    && pacman -Sc --noconfirm
+    && pacman -Sc --noconfirm \
+    && sed -E 's/^#(CheckSpace)$/\1/' -i /etc/pacman.conf
 # Don't run as root
 USER ${ADMIN_USER}
 WORKDIR /home/${ADMIN_USER}
