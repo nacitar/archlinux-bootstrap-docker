@@ -52,7 +52,7 @@ docker create --name wsl-archlinux wsl-archlinux
 docker export wsl-archlinux -o wsl-archlinux.tar
 docker rm wsl-archlinux
 docker rmi wsl-archlinux
-wsl import ArchLinux C:\WSL\ArchLinux wsl-archlinux.tar
+wsl --import ArchLinux C:\WSL\ArchLinux wsl-archlinux.tar
 ```
 Then simply delete wsl-archlinux.tar.  Note that because docker unavoidably
 forces a /.dockerenv file within the tar when you export it, combined with the
