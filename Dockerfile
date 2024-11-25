@@ -1,9 +1,12 @@
 # NOTE: pacman's disk space checks are failing at build time, but not runtime,
 # so the checks are disabled then re-enabled after installing packages below.
+# Also, because running in a container on windows, "landlock" is not supported
+# by the kernel, the pacman sandbox is disabled.
 FROM alpine AS bootstrap
 ARG MIRROR_URL="https://mnvoip.mm.fcix.net/archlinux"
 RUN set -euo pipefail \
-    && tarball="archlinux-bootstrap-x86_64.tar.gz" \
+    && apk add zstd \
+    && tarball="archlinux-bootstrap-x86_64.tar.zst" \
     && checksum_line="$(set -euo pipefail \
             && wget -qO- "${MIRROR_URL}/iso/latest/sha256sums.txt" \
                 | grep "\s$(echo "${tarball}" | sed 's/\./\\\./g')\$" \
@@ -11,9 +14,8 @@ RUN set -euo pipefail \
     && wget "${MIRROR_URL}/iso/latest/${tarball}" \
     && echo "${checksum_line}" | sha256sum -c \
     && mkdir /rootfs \
-    && tar \
-        --extract -z -f "${tarball}" \
-        --strip-components=1 --numeric-owner \
+    && zstd -dc "${tarball}" | tar \
+        --extract -f - --strip-components=1 --numeric-owner \
         -C /rootfs \
     && rm -f "${tarball}" /rootfs/README \
     && echo "Server = ${MIRROR_URL}/\$repo/os/\$arch" \
@@ -57,7 +59,8 @@ RUN set -euo pipefail \
         keychain openssh lsof \
         diffutils colordiff less \
         zip unzip \
-    && echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel \
+    && echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/wheel \
+    && echo 'Defaults passwd_timeout=0' > /etc/sudoers.d/disable_timeout \
     && useradd -G wheel -m "${ADMIN_USER}" \
     && printf '%s:%s' "${ADMIN_USER}" "${DEFAULT_PASSWORD}" | chpasswd \
     && if [ -z "${NO_DOCKER_GROUP:-}" ]; then \
@@ -114,7 +117,7 @@ RUN set -euo pipefail \
         && yay_git=https://aur.archlinux.org/yay.git \
         && build_directory=/tmp/yay \
         && makepkg_temporary_sudoers='/etc/sudoers.d/wheel_pacman_nopasswd' \
-        && echo "%wheel ALL=(ALL) NOPASSWD: /usr/sbin/pacman" \
+        && echo '%wheel ALL=(ALL) NOPASSWD: /usr/sbin/pacman' \
             > "${makepkg_temporary_sudoers}" \
         && su "${ADMIN_USER}" -c "set -euo pipefail \
                     && git clone '${yay_git}' '${build_directory}' \
@@ -124,8 +127,11 @@ RUN set -euo pipefail \
                     && rm -rf '${build_directory}' \
             " \
         && rm "${makepkg_temporary_sudoers}" \
+        && su "${ADMIN_USER}" -c \
+            'yay --sudoloop --save --version &>/dev/null' \
     ; fi \
     && pacman -Sc --noconfirm \
+    && sed -E 's/^#(DisableSandbox)$/\1/' -i /etc/pacman.conf \
     && sed -E 's/^#(CheckSpace)$/\1/' -i /etc/pacman.conf
 # Don't run as root
 USER ${ADMIN_USER}
