@@ -61,10 +61,6 @@ RUN set -euo pipefail \
         zip unzip \
     && echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/wheel \
     && echo 'Defaults passwd_timeout=0' > /etc/sudoers.d/disable_timeout \
-    && printf 'Defaults env_keep += "%s"\n' \
-        ftp_proxy http_proxy https_proxy no_proxy all_proxy \
-        FTP_PROXY HTTP_PROXY HTTPS_PROXY NO_PROXY ALL_PROXY \
-        >  /etc/sudoers.d/preserve_proxy_env \
     && useradd -G wheel -m "${ADMIN_USER}" \
     && printf '%s:%s' "${ADMIN_USER}" "${DEFAULT_PASSWORD}" | chpasswd \
     && if [ -z "${NO_DOCKER_GROUP:-}" ]; then \
