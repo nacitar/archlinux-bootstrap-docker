@@ -43,7 +43,6 @@ docker build -t archlinux-base --target base .
 ```
 
 One of the most involved use cases is creating an ArchLinux distro within WSL.
-Assuming you created C:\WSL and want your distro to be in C:\WSL\ArchLinux:
 ```
 docker build -t wsl-archlinux \
     --build-arg WSL_HOSTNAME=archlinux --build-arg ADMIN_USER=tux \
@@ -52,6 +51,12 @@ docker create --name wsl-archlinux wsl-archlinux
 docker export wsl-archlinux -o wsl-archlinux.tar
 docker rm wsl-archlinux
 docker rmi wsl-archlinux
+```
+
+
+Now you'll need to import the tar file into WSL from windows.
+Assuming you created C:\WSL and want your distro to be in C:\WSL\ArchLinux:
+```
 wsl --import ArchLinux C:\WSL\ArchLinux wsl-archlinux.tar
 ```
 Then simply delete wsl-archlinux.tar.  Note that because docker unavoidably
