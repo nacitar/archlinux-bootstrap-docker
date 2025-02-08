@@ -41,7 +41,6 @@ FROM base AS final
 ARG ADMIN_USER=tux
 ARG DEFAULT_PASSWORD=archlinux
 ARG WSL_HOSTNAME
-ARG WIN32YANK_VERSION="0.0.4"
 ARG NO_DOCKER_GROUP
 ARG NO_BASHRC
 ARG NO_DEV_TOOLS
@@ -73,12 +72,6 @@ RUN set -euo pipefail \
             '' \
             '[user]' "default=${ADMIN_USER}" \
             > /etc/wsl.conf \
-        && if [ -n "${WIN32YANK_VERSION:-}" ]; then \
-            base_url=https://github.com/equalsraf/win32yank/releases/download \
-            && version_base_url="${base_url}/v${WIN32YANK_VERSION}" \
-            && curl -L "${version_base_url}/win32yank-x64.zip" -o - \
-                | bsdtar -x -f - -C /usr/local/bin win32yank.exe \
-        ; fi \
     ; fi \
     && sed 's/^\(\s*set vicmd=\)vim\(\s*\)$/\1nvim\2/' \
             -i /usr/share/vifm/vifmrc \

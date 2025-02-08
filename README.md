@@ -17,10 +17,6 @@ image, but none are required and defaults are provided in the Dockerfile.
 - WSL\_HOSTNAME: If specified, /etc/wsl.conf will be created with the provided 
 hostname entry and the default user will also be set to the ADMIN\_USER.
 (Default: "")
-- WIN32YANK\_VERSION: When WSL\_HOSTNAME is specified the win32yank binary is
-installed in order to allow neovim's unnamedplus clipboard mode to access the
-windows system clipboard from within WSL.  If an empty string is specified this
-will be skipped. (Default: "0.0.4")
 - NO\_DOCKER\_GROUP: If specified, the admin user will not be added to the
 docker group. (Default: "")
 - NO\_BASHRC: If specified, [my bashrc](https://github.com/nacitar/bashrc)
@@ -72,6 +68,23 @@ Change the password to something secure:
 wsl -d ArchLinux passwd
 ```
 And then your WSL system should be imported and ready to use.
+
+# Win32Yank
+Win32Yank is an awesome tool that lets neovim (if configured properly) to yank
+to/paste from the Windows clipboard.  However, there's a bug in WSL where
+sometimes using this program causes wsl.exe to use 100% CPU, and over time this
+happens a lot.  There's an
+[issue](https://github.com/equalsraf/win32yank/issues/22) that points this
+out and has a solution; place win32yank.exe somewhere on your WINDOWS
+filesystem and NOT in linux.  Older versions of this Dockerfile installed this
+into a the Linux filesystem, but now this feature has been removed.  It is
+recommended to install this on Windows and add it to your system PATH
+_ON WINDOWS_ because your Windows user's PATH is automatically included in your
+PATH in WSL.  This solves the problem entirely.  I use %USERPROFILE%/bin.
+
+You can obtain the binary from the
+[releases page](https://github.com/equalsraf/win32yank/releases), downloading
+win32yank-x64.zip and extracting the .exe file from it.
 
 # Recommendations
 Immediately change the admin user's password to something other than the
