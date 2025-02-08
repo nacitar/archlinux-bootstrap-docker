@@ -74,13 +74,14 @@ Win32Yank is an awesome tool that lets neovim (if configured properly) to yank
 to/paste from the Windows clipboard.  However, there's a bug in WSL where
 sometimes using this program causes wsl.exe to use 100% CPU, and over time this
 happens a lot.  There's an
-[issue](https://github.com/equalsraf/win32yank/issues/22) that points this
-out and has a solution; place win32yank.exe somewhere on your WINDOWS
-filesystem and NOT in linux.  Older versions of this Dockerfile installed this
-into a the Linux filesystem, but now this feature has been removed.  It is
-recommended to install this on Windows and add it to your system PATH
-_ON WINDOWS_ because your Windows user's PATH is automatically included in your
-PATH in WSL.  This solves the problem entirely.  I use %USERPROFILE%/bin.
+[issue](https://github.com/neovim/neovim/issues/28272) for this, caused by an
+[upstream issue](https://github.com/equalsraf/win32yank/issues/22) that
+suggests a solution; place win32yank.exe somewhere on your WINDOWS filesystem
+and NOT in linux.  Older versions of this Dockerfile installed this into a the
+Linux filesystem, but now this feature has been removed.  It is recommended to
+install this on Windows and add it to your system PATH _ON WINDOWS_ because
+your Windows user's PATH is automatically included in your PATH in WSL.  This
+solves the problem entirely.  I use %USERPROFILE%/bin.
 
 You can obtain the binary from the
 [releases page](https://github.com/equalsraf/win32yank/releases), downloading
