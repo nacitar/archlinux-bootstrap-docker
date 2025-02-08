@@ -113,3 +113,14 @@ need to run pipx as the admin user (*NOT root*).
 
 In order to list packages installed via pipx, you can run `pipx list` and to
 upgrade all packages installed that way you can run `pipx upgrade-all`.
+
+# Extras
+It is not really relevant to container/WSL usages, but I included a script
+called `print_login_issue.sh` which writes out a simple login prompt header
+for an archlinux framebuffer.  It doesn't include any of the extra dynamic
+information you can include, and is just static text, but is a great start
+even if you wish to add more information.  The intended usage of it is:
+```
+./print_login_issue.sh | sudo tee /etc/issue
+```
+This will overwrite the existing /etc/issue.
