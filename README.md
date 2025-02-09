@@ -70,7 +70,7 @@ wsl -d ArchLinux passwd
 And then your WSL system should be imported and ready to use.
 
 # Win32Yank
-Win32Yank is an awesome tool that lets neovim (if configured properly) to yank
+Win32Yank is an awesome tool that lets neovim (if configured properly) yank
 to/paste from the Windows clipboard.  However, there's a bug in WSL where
 sometimes using this program causes wsl.exe to use 100% CPU, and over time this
 happens a lot.  There's an
