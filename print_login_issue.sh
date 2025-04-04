@@ -2,6 +2,9 @@
 
 # NOTE: will print to the terminal weirdly due to needing to escape \ with \\\\
 # but it will work perfectly when written to /etc/issue
+#
+# This will make it legible:
+# ./print_login_issue.sh | sed 's|\\\\|\\|g'
 echo -e '\e[H\e[2J\e[0;36m'
 echo -e '          ##'
 echo -e '         ####\e[1m                       _     _ _\e[22m'
