@@ -102,7 +102,6 @@ RUN set -euo pipefail \
         && su "${ADMIN_USER}" -c "set -euo pipefail \
                     && config_dir=\"\${HOME}/.config/nvim\" \
                     && git clone '${neovim_config_git}' \"\${config_dir}\" \
-                    && \"\${config_dir}/install_home_bin_forwarder.sh\" \
             " \
     ; fi \
     && if [ -z "${NO_YAY:-}" ]; then \
