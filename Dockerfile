@@ -79,6 +79,7 @@ RUN set -euo pipefail \
         bashrc_git=https://github.com/nacitar/bashrc.git \
         && su "${ADMIN_USER}" -c "set -euo pipefail \
                 && git clone '${bashrc_git}' \"\${HOME}/.bash\" \
+                && rm ~/.bashrc \
                 && \"\${HOME}/.bash/install.sh\" \
             " \
     ; else \
@@ -90,6 +91,9 @@ RUN set -euo pipefail \
                 base-devel clang cmake ccache doxygen \
                 shfmt shellcheck \
         && su "${ADMIN_USER}" -c "set -euo pipefail \
+                && python -m pipx install poetry \
+                && python -m pipx inject poetry poetry-plugin-up \
+                && python -m pipx inject poetry poetry-plugin-shell \
                 && python -m pipx install conan \
                 && python -m pipx install --include-deps cmake-format \
             " \
