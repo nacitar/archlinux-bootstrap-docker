@@ -3,7 +3,7 @@
 # Also, because running in a container on windows, "landlock" is not supported
 # by the kernel, the pacman sandbox is disabled.
 FROM alpine AS bootstrap
-ARG MIRROR_URL="https://mnvoip.mm.fcix.net/archlinux"
+ARG MIRROR_URL="https://nocix.mm.fcix.net/archlinux"
 RUN set -euo pipefail \
     && apk add zstd \
     && tarball="archlinux-bootstrap-x86_64.tar.zst" \
