@@ -52,7 +52,7 @@ RUN set -euo pipefail \
     && sed -E 's/^(CheckSpace)$/#\1/' -i /etc/pacman.conf \
     && pacman -S --noconfirm --needed python python-wheel \
     && pacman -S --noconfirm --needed \
-        python-pip python-virtualenv python-pipx \
+        python-pip python-virtualenv python-pipx python-requests tk \
         reflector pacman-contrib \
         sudo git vifm neovim \
         keychain openssh lsof \
