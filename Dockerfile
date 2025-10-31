@@ -54,7 +54,7 @@ RUN set -euo pipefail \
     && pacman -S --noconfirm --needed \
         python-pip python-virtualenv python-pipx python-requests tk \
         reflector pacman-contrib \
-        sudo git vifm neovim \
+        sudo git vifm neovim fd \
         keychain openssh lsof \
         diffutils colordiff less \
         zip unzip \
