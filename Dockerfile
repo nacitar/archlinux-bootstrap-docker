@@ -57,7 +57,7 @@ RUN set -euo pipefail \
         sudo git vifm neovim fd \
         keychain openssh lsof \
         diffutils colordiff less \
-        zip unzip \
+        zip unzip fuse-zip \
     && echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/wheel \
     && echo 'Defaults passwd_timeout=0' > /etc/sudoers.d/disable_timeout \
     && useradd -G wheel -m "${ADMIN_USER}" \
